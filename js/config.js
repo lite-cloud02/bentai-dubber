@@ -1,5 +1,4 @@
-// Ye dono values public hoti hain (Supabase > Project Settings > API). service_role key yahan KABHI mat daalna.
 window.BD_CONFIG = {
-  SUPABASE_URL: 'https://YOUR-PROJECT.supabase.co',
-  SUPABASE_ANON_KEY: 'YOUR-ANON-PUBLIC-KEY'
+  SUPABASE_URL: 'https://otacsvpfeybgaujlhrwn.supabase.co',
+  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90YWNzdnBmZXliZ2F1amxocnduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ4Mjg4NjMsImV4cCI6MjExMDQwNDg2M30.mkrDXdkp4jKQCv9TTzjqh1NGZ1BsSRWlagqSdbRKLq0'
 };
