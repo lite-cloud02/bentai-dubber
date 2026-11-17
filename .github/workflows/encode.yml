@@ -1,0 +1,40 @@
+name: Encode episode
+
+on:
+  workflow_dispatch:
+    inputs:
+      episode_id:
+        description: 'Episode ID (admin panel se)'
+        required: true
+      source_key:
+        description: 'Bucket mein upload ki hui file ka naam (jaise mems.mp4)'
+        required: true
+
+jobs:
+  encode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.S3_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET }}
+      AWS_DEFAULT_REGION: ${{ secrets.S3_REGION }}
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+      S3_REGION: ${{ secrets.S3_REGION }}
+      KEY_SECRET: ${{ secrets.KEY_SECRET }}
+      SITE_URL: ${{ secrets.SITE_URL }}
+      PRESET: medium
+      EP: ${{ inputs.episode_id }}
+      SRC: ${{ inputs.source_key }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ffmpeg
+        run: sudo apt-get update -y && sudo apt-get install -y ffmpeg
+      - name: Download source from bucket
+        run: aws s3 cp "s3://$S3_BUCKET/$SRC" input.mp4 --endpoint-url "https://$S3_ENDPOINT"
+      - name: Encode (720p, encrypted HLS) and upload
+        run: bash tools/encode.sh input.mp4 "$EP"
+      - name: Delete source file
+        run: aws s3 rm "s3://$S3_BUCKET/$SRC" --endpoint-url "https://$S3_ENDPOINT"
