@@ -7,7 +7,7 @@ on:
         description: 'Episode ID (admin panel se)'
         required: true
       source_key:
-        description: 'Bucket mein upload ki hui file ka naam (jaise mems.mp4)'
+        description: 'Bucket mein upload ki hui file ka path (jaise uploads/ep1.mp4)'
         required: true
 
 jobs:
