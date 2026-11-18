@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
-# Video ko 720p + AES-128 encrypted HLS mein badalta hai, aur (agar set ho) Cloudflare R2 par upload karta hai.
-# Use:  ./tools/encode.sh input.mp4 EPISODE_ID
-# Zaroori env:  KEY_SECRET (Vercel wala same), SITE_URL (https://your-site.vercel.app)
-# Upload ke liye:  S3_BUCKET, S3_ENDPOINT (jaise s3.us-east-005.backblazeb2.com), S3_REGION,
-#                  aur AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (Backblaze keyID / applicationKey)
+# Video ko 720p + AES-128 encrypted HLS mein badalta hai aur Backblaze par upload karta hai.
 set -euo pipefail
 INPUT="${1:?input video file do}"; EP="${2:?episode id do (admin panel se)}"
 : "${KEY_SECRET:?KEY_SECRET set karo}" "${SITE_URL:?SITE_URL set karo}"
@@ -29,7 +25,7 @@ if [ -n "${S3_BUCKET:-}" ] && [ -n "${S3_ENDPOINT:-}" ]; then
   AWS_DEFAULT_REGION="${S3_REGION:-us-east-005}" aws s3 sync "$OUT" "s3://$S3_BUCKET/episodes/$EP" --endpoint-url "https://${S3_ENDPOINT#https://}" --delete
   echo "Upload ho gaya: episodes/$EP"
 else
-  echo "S3_BUCKET / S3_ENDPOINT set nahi hain, upload nahi hua. $OUT folder ko bucket mein episodes/$EP/ naam se daalo."
-  # GitHub Actions mein (CI=true) fail karo, taaki source file bina upload ke delete na ho
+  echo "S3_BUCKET / S3_ENDPOINT set nahi hain, upload nahi hua."
+  # GitHub Actions mein fail karo, taaki source file bina upload ke delete na ho
   if [ -n "${CI:-}" ]; then echo "ERROR: upload skip hua, isliye run fail kar raha hoon." >&2; exit 1; fi
 fi
