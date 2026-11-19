@@ -1,12 +1,17 @@
-const { db, UUID, getUser, isAdmin, displayName, send, fail, activeGrant } = require('./_lib');
+const { db, UUID, getUser, isAdmin, displayName, send, fail, activeGrant, limited, claimDevice } = require('./_lib');
 module.exports = async (req, res) => {
   try {
     const user = await getUser(req);
     if (!user) return fail(res, 401, 'Please log in first');
     const e = req.query.e;
     if (!UUID.test(e || '')) return fail(res, 400, 'Bad episode');
+    const beat = req.query.beat === '1'; // player har ~40 second mein "main chal raha hoon" bhejta hai
+    if (await limited(req, res, (beat ? 'beat:' : 'play:') + user.id, beat ? 10 : 30, 60)) return;
     const grant = await activeGrant(user.id, e);
     if (!grant) return fail(res, 403, 'locked');
+    const bad = await claimDevice(req, user, e, !beat);
+    if (bad) return fail(res, bad.code, bad.msg);
+    if (beat) return send(res, 200, { ok: true });
     const { data: ep } = await db.from('episodes').select('id,title,number,anime_id,anime(title,poster_url)').eq('id', e).maybeSingle();
     if (!ep) return fail(res, 404, 'Episode not found');
     let views = null; // needs supabase/update2.sql; hidden until then

@@ -17,7 +17,7 @@ const db = createClient(SUPABASE_URL || 'https://missing.supabase.co', SERVICE_K
 
 const cfg = {
   siteUrl: (process.env.SITE_URL || '').replace(/\/$/, ''),
-  minWait: Number(process.env.MIN_WAIT_SECONDS || 15),
+  minWait: Math.max(60, Number(process.env.MIN_WAIT_SECONDS || 60)), // kam se kam 1 minute
   accessMinutes: Number(process.env.ACCESS_MINUTES || 60),
   admins: (process.env.ADMIN_EMAILS || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean)
 };
@@ -36,7 +36,8 @@ async function getUser(req) {
   return data.user;
 }
 
-const isAdmin = u => !!u && cfg.admins.includes((u.email || '').toLowerCase());
+// Admin sirf wahi jiska email confirm ho chuka ho (koi dusra admin ki email se signup karke admin na ban sake)
+const isAdmin = u => !!u && !!(u.email_confirmed_at || u.confirmed_at) && cfg.admins.includes((u.email || '').toLowerCase());
 // VIP: admin panel se email add hoti hai (vip_users table). Expiry ke baad row apne aap delete ho jaati hai.
 // Return: null (VIP nahi) ya { expiresAt: ISO string ya null (lifetime) }
 async function vipInfo(u) {
@@ -72,4 +73,44 @@ async function activeGrant(userId, episodeId) {
   return data || null;
 }
 
-module.exports = { db, cfg, missing, UUID, getUser, isAdmin, vipInfo, displayName, send, fail, episodeKey, activeGrant, crypto };
+// ---------- Rate limit (supabase/update4.sql ki rate_limits table + rl_hit function) ----------
+const ipOf = req => String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || (req.socket && req.socket.remoteAddress) || 'ip';
+async function limited(req, res, key, max, seconds) {
+  try {
+    const { data, error } = await db.rpc('rl_hit', { p_key: key, p_seconds: seconds });
+    if (error) return false; // table abhi nahi bani to site na ruke
+    if (Math.random() < 0.01) await db.from('rate_limits').delete().lt('expires_at', new Date().toISOString());
+    if (Number(data) > max) { fail(res, 429, 'Too many requests. Please wait a minute and try again.'); return true; }
+  } catch (e) { /* fail-open */ }
+  return false;
+}
+
+// ---------- Device limit: ek account par max 2 device, aur ek time par sirf 1 device se play ----------
+const MAX_DEVICES = 2;
+const SESSION_STALE_MS = 120000; // itne time tak beat na aaye to device "band" maana jaata hai
+async function claimDevice(req, user, episodeId, register) {
+  if (isAdmin(user)) return null;
+  const dev = String(req.headers['x-device-id'] || '');
+  if (!/^[A-Za-z0-9-]{8,64}$/.test(dev)) return { code: 400, msg: 'Please refresh the page and try again.' };
+  try {
+    const now = Date.now();
+    if (register) {
+      await db.from('user_devices').delete().eq('user_id', user.id).lt('last_seen', new Date(now - 30 * 86400000).toISOString());
+      const { data: list } = await db.from('user_devices').select('device_id').eq('user_id', user.id);
+      const known = (list || []).some(d => d.device_id === dev);
+      if (!known) {
+        if ((list || []).length >= MAX_DEVICES) return { code: 423, msg: 'This account is already used on 2 devices. One account can be used on only 2 devices.' };
+        await db.from('user_devices').insert({ user_id: user.id, email: (user.email || '').toLowerCase(), device_id: dev });
+      } else {
+        await db.from('user_devices').update({ last_seen: new Date(now).toISOString() }).eq('user_id', user.id).eq('device_id', dev);
+      }
+    }
+    const { data: s } = await db.from('play_sessions').select('device_id,last_beat').eq('user_id', user.id).maybeSingle();
+    if (s && s.device_id !== dev && now - new Date(s.last_beat).getTime() < SESSION_STALE_MS)
+      return { code: 409, msg: 'This account is playing on another device. Stop it there first, then try again in a minute.' };
+    await db.from('play_sessions').upsert({ user_id: user.id, device_id: dev, episode_id: episodeId, last_beat: new Date(now).toISOString() }, { onConflict: 'user_id' });
+  } catch (e) { /* table nahi bani to site na ruke */ }
+  return null;
+}
+
+module.exports = { db, cfg, ipOf, limited, claimDevice, missing, UUID, getUser, isAdmin, vipInfo, displayName, send, fail, episodeKey, activeGrant, crypto };

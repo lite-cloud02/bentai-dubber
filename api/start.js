@@ -1,4 +1,4 @@
-const { db, cfg, UUID, getUser, vipInfo, send, fail, activeGrant, crypto } = require('./_lib');
+const { db, cfg, UUID, getUser, vipInfo, send, fail, activeGrant, limited, crypto } = require('./_lib');
 
 async function shorten(dest) {
   const key = process.env.AROLINKS_API_KEY;
@@ -24,6 +24,7 @@ module.exports = async (req, res) => {
   try {
     const user = await getUser(req);
     if (!user) return fail(res, 401, 'Please log in first');
+    if (await limited(req, res, 'start:' + user.id, 10, 60)) return;
     const episodeId = req.body && req.body.episodeId;
     if (!UUID.test(episodeId || '')) return fail(res, 400, 'Bad episode');
 

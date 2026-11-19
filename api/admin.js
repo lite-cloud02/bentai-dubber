@@ -1,4 +1,4 @@
-const { db, UUID, getUser, isAdmin, send, fail, crypto } = require('./_lib');
+const { db, UUID, getUser, isAdmin, send, fail, limited, crypto } = require('./_lib');
 const { KEYS, clean, loadSettings } = require('./_settings');
 
 module.exports = async (req, res) => {
@@ -6,6 +6,7 @@ module.exports = async (req, res) => {
     const user = await getUser(req);
     if (!user) return fail(res, 401, 'Login required');
     if (!isAdmin(user)) return fail(res, 403, 'Admins only');
+    if (await limited(req, res, 'admin:' + user.id, 120, 60)) return;
 
     if (req.method === 'GET') {
       const { data } = await db.from('anime')
@@ -83,6 +84,14 @@ module.exports = async (req, res) => {
       return send(res, 200, { ok: true });
     }
 
+    if (b.action === 'resetDevices') {
+      const email = String(b.email || '').trim().toLowerCase();
+      if (!email) return fail(res, 400, 'Enter an email');
+      const { data: rows } = await db.from('user_devices').select('user_id').eq('email', email);
+      await db.from('user_devices').delete().eq('email', email);
+      for (const uid of [...new Set((rows || []).map(x => x.user_id))]) await db.from('play_sessions').delete().eq('user_id', uid);
+      return send(res, 200, { ok: true, removed: (rows || []).length });
+    }
     if (b.action === 'addVip') {
       const email = String(b.email || '').trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 120) return fail(res, 400, 'Enter a valid email');

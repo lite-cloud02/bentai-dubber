@@ -1,9 +1,10 @@
-const { db, cfg, getUser, send, fail } = require('./_lib');
+const { db, cfg, getUser, send, fail, limited } = require('./_lib');
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return fail(res, 405, 'POST only');
   try {
     const user = await getUser(req);
     if (!user) return fail(res, 401, 'Please log in first');
+    if (await limited(req, res, 'verify:' + user.id, 10, 60)) return;
     const token = String((req.body && req.body.token) || '');
     if (!/^[0-9a-f]{48}$/.test(token)) return fail(res, 400, 'Invalid link');
 
@@ -14,7 +15,7 @@ module.exports = async (req, res) => {
 
     const age = (Date.now() - new Date(t.created_at).getTime()) / 1000;
     if (age > 30 * 60) return fail(res, 400, 'This link has expired. Open the episode again.');
-    if (age < cfg.minWait) return fail(res, 400, 'The link was completed too fast. Please complete the whole shortener.');
+    if (age < cfg.minWait) return fail(res, 400, 'The link was completed too fast. Please open the episode again and finish every step of the short link (it takes about 1 minute).');
 
     // Sirf ek hi baar use ho: used=false wali row hi update hogi
     const { data: claimed } = await db.from('shortener_tokens').update({ used: true })
