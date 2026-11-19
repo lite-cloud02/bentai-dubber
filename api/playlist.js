@@ -1,4 +1,4 @@
-const { UUID, getUser, fail, activeGrant } = require('./_lib');
+const { UUID, getUser, isAdmin, fail, activeGrant } = require('./_lib');
 const { s3missing, signedUrl, rewritePlaylist } = require('./_s3');
 
 // HLS playlist: sirf active access wale user ko, har segment ka signed link ke saath
@@ -10,7 +10,7 @@ module.exports = async (req, res) => {
     if (!user) return fail(res, 401, 'Login required');
     const e = req.query.e;
     if (!UUID.test(e || '')) return fail(res, 400, 'Bad episode');
-    const grant = await activeGrant(user.id, e);
+    const grant = isAdmin(user) ? { expires_at: new Date(Date.now() + 2 * 3600 * 1000).toISOString() } : await activeGrant(user.id, e);
     if (!grant) return fail(res, 403, 'Access expired');
 
     const left = Math.floor((new Date(grant.expires_at).getTime() - Date.now()) / 1000);
