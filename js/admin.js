@@ -50,6 +50,11 @@ function render() {
     <button class="btn">Add VIP</button>
     ${(data.vips || []).length ? (data.vips || []).map(x => `<div class="row"><span>${v(x.email)}<br><small>${x.expires_at ? 'Expires ' + new Date(x.expires_at).toLocaleDateString('en-IN') + ' (' + Math.max(0, Math.ceil((new Date(x.expires_at) - Date.now()) / 86400000)) + ' days left)' : 'Lifetime'}${x.note ? ' &middot; ' + v(x.note) : ''}</small></span><button type="button" class="del" data-vip="${v(x.email)}">Remove</button></div>`).join('') : '<p class="muted">No VIP users yet.</p>'}</form>
 
+  <form class="panel" id="fD"><h2>Reset devices</h2>
+    <p class="muted" style="font-size:13px;margin-top:-6px">One account works on only 2 devices. If a user changed phone or cleared the browser, enter their email to clear their saved devices.</p>
+    <div class="field"><label>User email</label><input name="email" type="email" required placeholder="user@gmail.com"></div>
+    <button class="btn">Reset devices</button></form>
+
   <form class="panel" id="fS"><h2>Site settings</h2>
     <p class="muted" style="font-size:13px;margin-top:-6px">Leave a field empty to hide it on the site. Links must start with https://</p>
     ${inp('telegram', 'Telegram link', 'https://t.me/...')}
@@ -120,6 +125,13 @@ function render() {
     await post('admin', { action: 'removeVip', email: b.dataset.vip });
     await load();
   }));
+
+  $('#fD').onsubmit = ev => { ev.preventDefault(); run(async () => {
+    const f = Object.fromEntries(new FormData(ev.target));
+    const r = await post('admin', { action: 'resetDevices', email: f.email });
+    alert('Cleared ' + r.removed + ' saved device(s).');
+    ev.target.reset();
+  }); };
 
   $('#fS').onsubmit = ev => { ev.preventDefault(); run(async () => {
     const form = ev.target, settings = {};

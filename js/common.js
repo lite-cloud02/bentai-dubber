@@ -15,8 +15,21 @@ async function accessToken() {
   return data.session ? data.session.access_token : null;
 }
 
+// Is browser ki pehchaan (device id). Ek account max 2 device par chal sakta hai.
+function deviceId() {
+  if (window.__bdDev) return window.__bdDev;
+  let d = '';
+  try { d = localStorage.getItem('bd_dev') || ''; } catch (e) { /* private mode */ }
+  if (!/^[A-Za-z0-9-]{8,64}$/.test(d)) {
+    d = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+    try { localStorage.setItem('bd_dev', d); } catch (e) { /* ignore */ }
+  }
+  window.__bdDev = d;
+  return d;
+}
+
 async function api(path, opts = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json', 'X-Device-Id': deviceId() };
   const tok = await accessToken();
   if (tok) headers.Authorization = 'Bearer ' + tok;
   const r = await fetch('/api/' + path, { ...opts, headers });

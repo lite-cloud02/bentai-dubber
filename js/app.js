@@ -76,7 +76,7 @@ modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
 function loading(msg) { app.innerHTML = `<div class="center"><div class="spin"></div><p>${esc(msg || 'Loading...')}</p></div>`; }
 function stopPlayer() {
   if (!player) return;
-  clearInterval(player.timer); clearInterval(player.wmTimer); clearTimeout(player.hideT);
+  clearInterval(player.timer); clearInterval(player.beat); clearInterval(player.wmTimer); clearTimeout(player.hideT);
   if (player.hls) player.hls.destroy();
   if (player.kd) document.removeEventListener('keydown', player.kd);
   if (player.fsc) document.removeEventListener('fullscreenchange', player.fsc);
@@ -537,6 +537,19 @@ async function watch(id) {
     $('#left').textContent = `Access: ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} left`;
   };
   tick(); P.timer = setInterval(tick, 1000);
+
+  /* --- ek time par 1 device: har 40 second mein server ko batate hain; dusre device par chala to yahan band --- */
+  P.beat = setInterval(async () => {
+    if (P.done) return;
+    try { await api('play?e=' + encodeURIComponent(id) + '&beat=1'); }
+    catch (e) {
+      if (e.status === 409 || e.status === 423) {
+        showErr({ msg: e.message, det: 'device-' + e.status });
+        P.done = true; video.pause(); if (P.hls) P.hls.destroy(); video.removeAttribute('src'); video.load();
+        clearInterval(P.beat);
+      }
+    }
+  }, 40000);
 }
 
 /* ---------- me ---------- */
