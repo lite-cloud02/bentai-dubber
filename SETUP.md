@@ -3,7 +3,7 @@
 ## 1. Supabase (login + database)
 1. supabase.com par project banao.
 2. SQL Editor mein `supabase/schema.sql` ka poora code paste karke Run karo.
-3. Authentication > Providers > Email: "Confirm email" band kar do (simple rakhna ho to).
+3. Authentication > Sign In / Providers > Email: "Confirm email" ON rakho (security ke liye zaroori hai, warna koi admin ki email se signup kar sakta hai).
 4. Project Settings > API se 3 cheezein lo: Project URL, anon public key, service_role key.
 5. `js/config.js` mein URL aur **anon** key daalo. service_role key kisi file mein mat daalna.
 
