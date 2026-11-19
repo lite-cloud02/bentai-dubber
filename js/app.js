@@ -62,6 +62,7 @@ function openReport(episodeId) {
 }
 
 /* ---------- helpers ---------- */
+const fmtV = n => n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K' : String(n);
 function posterHtml(a) {
   return a.poster_url ? `<img src="${esc(a.poster_url)}" alt="${esc(a.title)}" loading="lazy">` : `<span class="ph">${esc((a.title || '?')[0])}</span>`;
 }
@@ -309,7 +310,7 @@ async function watch(id) {
   }
 
   app.innerHTML = `<section class="watch"><div class="wgrid"><div class="wmain">
-    <div class="wtop"><a class="backpill" href="#/anime/${esc(info.animeId)}">&larr; Back</a><span class="crumb"><b>${esc(info.animeTitle)}</b> / EP ${esc(info.number)}</span></div>
+    <div class="wtop"><a class="backc" href="#/anime/${esc(info.animeId)}" aria-label="Back"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M13.5 8l-4 4 4 4"/></svg></a><span class="sl">/</span><span class="eptag">EPISODE ${esc(info.number)}</span></div>
     <div class="player" id="pl">
       <video id="vid" playsinline webkit-playsinline preload="auto" disablePictureInPicture controlsList="nodownload noremoteplayback"></video>
       <div class="wm" id="wm">${esc(info.watermark)}</div>
@@ -342,11 +343,11 @@ async function watch(id) {
     </div>
     <div class="winfo">
       <h1 class="wtitle">${esc(info.title)}</h1>
-      <div class="wmeta"><span>${esc(info.animeTitle)}</span></div>
-      <div class="wact"><button class="pill nx" id="nextbtn" hidden>Next episode &rsaquo;</button><button class="pill" id="repbtn">Report a problem</button></div>
+      <div class="wmeta"><span class="aname">${esc(info.animeTitle)}</span>${info.views != null ? `<span class="views">${fmtV(info.views)}<svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span>` : ''}</div>
+      <div class="wact"><button class="pill nx" id="nextbtn" hidden>Next episode &rsaquo;</button></div>
       
     </div></div>
-    <aside class="upnext"><div class="epcard"><div class="eph"><span>EPISODES</span><div class="epnav"><button id="epPrev" aria-label="Previous episode" disabled>&lsaquo;</button><button id="epNext" aria-label="Next episode" disabled>&rsaquo;</button></div></div><div class="epchips" id="upl"><span class="muted">Loading...</span></div></div><p class="vnote">Every episode needs its own verification. After unlocking, it stays open for 60 minutes.</p><div class="accbar"><span class="chip" id="left"></span></div></aside>
+    <aside class="upnext"><div class="epcard"><div class="eph"><span>EPISODES</span><div class="epnav"><button id="epPrev" aria-label="Previous episode" disabled>&lsaquo;</button><button id="epNext" aria-label="Next episode" disabled>&rsaquo;</button></div></div><div class="epchips" id="upl"><span class="muted">Loading...</span></div></div><p class="vnote">Every episode needs its own verification. After unlocking, it stays open for 60 minutes.</p><a class="live" href="#/anime/${esc(info.animeId)}"><span class="liveimg">${posterHtml({ poster_url: info.animePoster, title: info.animeTitle })}</span><span class="livetxt">Live Episode</span></a><span id="left" hidden></span></aside>
   </div></section>`;
 
   const video = $('#vid'), pl = $('#pl'), wm = $('#wm'), ctrls = $('#ctrls'), pp = $('#pp'), seek = $('#seek'), menu = $('#menu');
@@ -375,7 +376,6 @@ async function watch(id) {
     $('#err').hidden = false; buf.classList.add('hide'); ctrls.classList.add('hide');
   };
   $('#retry').onclick = () => watch(id);
-  $('#repbtn').onclick = () => openReport(id);
   $('#errrep').onclick = () => openReport(id);
   $('#nextgo').onclick = () => { if (P.next) askUnlock(P.next.id); };
   $('#replay').onclick = () => { $('#nextbox').hidden = true; video.currentTime = 0; video.play().catch(() => {}); };
