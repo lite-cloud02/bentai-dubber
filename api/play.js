@@ -11,6 +11,7 @@ module.exports = async (req, res) => {
     if (!ep) return fail(res, 404, 'Episode not found');
     send(res, 200, {
       title: ep.title,
+      number: ep.number,
       animeId: ep.anime_id,
       animeTitle: ep.anime ? ep.anime.title : '',
       playlist: `/api/playlist?e=${ep.id}`,
