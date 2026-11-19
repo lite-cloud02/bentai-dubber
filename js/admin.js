@@ -1,5 +1,5 @@
 const root = $('#admin');
-let data = { anime: [], settings: {}, reports: [] }, editA = null, editE = null, msg = '';
+let data = { anime: [], settings: {}, reports: [], vips: [] }, editA = null, editE = null, msg = '';
 const v = x => esc(x == null ? '' : x);
 
 async function start() {
@@ -41,6 +41,14 @@ function render() {
 
   <div class="panel"><h2>Reports (${(data.reports || []).length})</h2>
     ${(data.reports || []).length ? data.reports.map(r => `<div class="row"><span>${v(r.episodes && r.episodes.anime ? r.episodes.anime.title : '')} &middot; ${v(r.episodes && r.episodes.title)}<br><small>${v(r.message)} &middot; ${new Date(r.created_at).toLocaleString('en-IN')}</small></span><button class="del ok" data-r="${r.id}">Resolved</button></div>`).join('') : '<p class="muted">No reports yet.</p>'}</div>
+
+  <form class="panel" id="fV"><h2>VIP accounts (${(data.vips || []).length})</h2>
+    <p class="muted" style="font-size:13px;margin-top:-6px">VIP users skip the shortener link. Enter the email they used to sign up. After the VIP days end, the user is removed from this list automatically. Adding the same email again renews the days.</p>
+    <div class="field"><label>User email</label><input name="email" type="email" required placeholder="user@gmail.com"></div>
+    <div class="field"><label>VIP days (empty = lifetime, e.g. 30)</label><input name="days" type="number" min="1" max="3650" placeholder="30"></div>
+    <div class="field"><label>Note (optional)</label><input name="note" maxlength="80" placeholder="e.g. paid, friend"></div>
+    <button class="btn">Add VIP</button>
+    ${(data.vips || []).length ? (data.vips || []).map(x => `<div class="row"><span>${v(x.email)}<br><small>${x.expires_at ? 'Expires ' + new Date(x.expires_at).toLocaleDateString('en-IN') + ' (' + Math.max(0, Math.ceil((new Date(x.expires_at) - Date.now()) / 86400000)) + ' days left)' : 'Lifetime'}${x.note ? ' &middot; ' + v(x.note) : ''}</small></span><button type="button" class="del" data-vip="${v(x.email)}">Remove</button></div>`).join('') : '<p class="muted">No VIP users yet.</p>'}</form>
 
   <form class="panel" id="fS"><h2>Site settings</h2>
     <p class="muted" style="font-size:13px;margin-top:-6px">Leave a field empty to hide it on the site. Links must start with https://</p>
@@ -101,6 +109,17 @@ function render() {
     $('#cmdBox').innerHTML = `<p class="muted" style="margin:12px 0 0">Episode created. Copy this <b>episode ID</b>:</p><code class="cmd">${r.id}</code><p class="muted" style="font-size:13px">GitHub &rarr; Actions &rarr; Encode episode &rarr; Run workflow. Put this ID in <b>episode_id</b> and the Backblaze file name in <b>source_key</b>.</p>`;
   }); };
   if ($('#cancelE')) $('#cancelE').onclick = () => { editE = null; render(); };
+
+  $('#fV').onsubmit = ev => { ev.preventDefault(); run(async () => {
+    const f = Object.fromEntries(new FormData(ev.target));
+    await post('admin', { action: 'addVip', email: f.email, days: f.days, note: f.note });
+    await load();
+  }); };
+  root.querySelectorAll('[data-vip]').forEach(b => b.onclick = () => run(async () => {
+    if (!confirm('Remove VIP from ' + b.dataset.vip + '?')) return;
+    await post('admin', { action: 'removeVip', email: b.dataset.vip });
+    await load();
+  }));
 
   $('#fS').onsubmit = ev => { ev.preventDefault(); run(async () => {
     const form = ev.target, settings = {};
