@@ -1,4 +1,4 @@
-name: Encode episode
+name: Encode episode v2
 
 on:
   workflow_dispatch:
