@@ -297,7 +297,7 @@ function friendlyError(d) {
 }
 
 async function watch(id) {
-  stopPlayer(); chrome(false); loading('Preparing video...');
+  stopPlayer(); chrome(true, 'home'); loading('Preparing video...');
   let info;
   try { info = await api('play?e=' + encodeURIComponent(id)); }
   catch (e) {
@@ -309,6 +309,7 @@ async function watch(id) {
   }
 
   app.innerHTML = `<section class="watch"><div class="wgrid"><div class="wmain">
+    <div class="wtop"><a class="backpill" href="#/anime/${esc(info.animeId)}">&larr; Back</a><span class="crumb"><b>${esc(info.animeTitle)}</b> / EP ${esc(info.number)}</span></div>
     <div class="player" id="pl">
       <video id="vid" playsinline webkit-playsinline preload="auto" disablePictureInPicture controlsList="nodownload noremoteplayback"></video>
       <div class="wm" id="wm">${esc(info.watermark)}</div>
@@ -341,11 +342,11 @@ async function watch(id) {
     </div>
     <div class="winfo">
       <h1 class="wtitle">${esc(info.title)}</h1>
-      <div class="wmeta"><span>${esc(info.animeTitle)}</span><span class="chip" id="left"></span></div>
-      <div class="wact"><button class="pill nx" id="nextbtn" hidden>Next episode &rsaquo;</button><a class="pill" href="#/anime/${esc(info.animeId)}">Anime page</a><button class="pill" id="repbtn">Report a problem</button><a class="pill" href="#/">Home</a></div>
+      <div class="wmeta"><span>${esc(info.animeTitle)}</span></div>
+      <div class="wact"><button class="pill nx" id="nextbtn" hidden>Next episode &rsaquo;</button><button class="pill" id="repbtn">Report a problem</button></div>
       
     </div></div>
-    <aside class="upnext"><h2>Up next</h2><div id="upl"><p class="muted">Loading...</p></div></aside>
+    <aside class="upnext"><div class="epcard"><div class="eph"><span>EPISODES</span><div class="epnav"><button id="epPrev" aria-label="Previous episode" disabled>&lsaquo;</button><button id="epNext" aria-label="Next episode" disabled>&rsaquo;</button></div></div><div class="epchips" id="upl"><span class="muted">Loading...</span></div></div><p class="vnote">Every episode needs its own verification. After unlocking, it stays open for 60 minutes.</p><div class="accbar"><span class="chip" id="left"></span></div></aside>
   </div></section>`;
 
   const video = $('#vid'), pl = $('#pl'), wm = $('#wm'), ctrls = $('#ctrls'), pp = $('#pp'), seek = $('#seek'), menu = $('#menu');
@@ -357,12 +358,13 @@ async function watch(id) {
   /* --- agle episodes (YouTube ke "up next" jaisa) --- */
   api('anime?id=' + encodeURIComponent(info.animeId)).then(r => {
     if (player !== P) return;
-    $('#upl').innerHTML = r.episodes.map(e => `<button class="un ${e.id === id ? 'cur' : ''}" data-id="${e.id}">
-      <div class="unp">${r.anime.poster_url ? `<img src="${esc(r.anime.poster_url)}" alt="" loading="lazy">` : ''}<b class="num">Ep ${e.number}</b></div>
-      <div class="unt"><b>${esc(e.title)}</b><small>${e.id === id ? 'Now playing' : esc(r.anime.title)}</small></div></button>`).join('') || '<p class="muted">No more episodes.</p>';
-    $('#upl').querySelectorAll('.un').forEach(b => { if (b.dataset.id !== id) b.onclick = () => askUnlock(b.dataset.id); });
-    const ix = r.episodes.findIndex(e => e.id === id);
-    P.next = ix >= 0 ? r.episodes[ix + 1] || null : null;
+    const eps = r.episodes, ix = eps.findIndex(e => e.id === id);
+    $('#upl').innerHTML = eps.map(e => `<button class="epc ${e.id === id ? 'cur' : ''}" data-id="${e.id}">${e.number}</button>`).join('');
+    $('#upl').querySelectorAll('.epc').forEach(b => { if (b.dataset.id !== id) b.onclick = () => askUnlock(b.dataset.id); });
+    const pv = eps[ix - 1], nx = eps[ix + 1];
+    if (pv) { $('#epPrev').disabled = false; $('#epPrev').onclick = () => askUnlock(pv.id); }
+    if (nx) { $('#epNext').disabled = false; $('#epNext').onclick = () => askUnlock(nx.id); }
+    P.next = nx || null;
     if (P.next) { const nb = $('#nextbtn'); nb.hidden = false; nb.onclick = () => askUnlock(P.next.id); }
   }).catch(() => { const u = $('#upl'); if (u) u.innerHTML = ''; });
 
