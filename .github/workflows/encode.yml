@@ -38,6 +38,7 @@ jobs:
           SITE="${SITE_URL%/}"
           WORK="$(mktemp -d)"
           OUT="hls_out/$EP"
+          echo "KEY_SECRET check: length=${#KEY_SECRET} fingerprint=$(printf '%s' "$KEY_SECRET" | sha256sum | cut -c1-8)"
           mkdir -p "$OUT"
           printf '%s' "$EP" | openssl dgst -sha256 -hmac "$KEY_SECRET" -binary > "$WORK/full.bin"
           head -c 16 "$WORK/full.bin" > "$WORK/enc.key"
