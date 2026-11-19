@@ -1,4 +1,4 @@
-const { db, cfg, UUID, getUser, send, fail, activeGrant, crypto } = require('./_lib');
+const { db, cfg, UUID, getUser, vipInfo, send, fail, activeGrant, crypto } = require('./_lib');
 
 async function shorten(dest) {
   const key = process.env.AROLINKS_API_KEY;
@@ -32,6 +32,18 @@ module.exports = async (req, res) => {
 
     // 1 ghante ka access abhi chal raha hai to dobara shortener nahi
     if (await activeGrant(user.id, episodeId)) return send(res, 200, { direct: true });
+
+    // VIP / admin: shortener skip. Normal user jaisa hi grant milta hai (VIP expiry se pehle khatam)
+    const vip = await vipInfo(user);
+    if (vip) {
+      let exp = Date.now() + cfg.accessMinutes * 60000;
+      if (vip.expiresAt) exp = Math.min(exp, new Date(vip.expiresAt).getTime());
+      await db.from('access_grants').upsert(
+        { user_id: user.id, episode_id: episodeId, expires_at: new Date(exp).toISOString() },
+        { onConflict: 'user_id,episode_id' }
+      );
+      return send(res, 200, { direct: true });
+    }
 
     const since = new Date(Date.now() - 60000).toISOString();
     const { count } = await db.from('shortener_tokens').select('token', { count: 'exact', head: true })

@@ -37,6 +37,22 @@ async function getUser(req) {
 }
 
 const isAdmin = u => !!u && cfg.admins.includes((u.email || '').toLowerCase());
+// VIP: admin panel se email add hoti hai (vip_users table). Expiry ke baad row apne aap delete ho jaati hai.
+// Return: null (VIP nahi) ya { expiresAt: ISO string ya null (lifetime) }
+async function vipInfo(u) {
+  if (!u || !u.email) return null;
+  if (isAdmin(u)) return { expiresAt: null };
+  try {
+    const email = u.email.toLowerCase();
+    const { data } = await db.from('vip_users').select('expires_at').eq('email', email).maybeSingle();
+    if (!data) return null;
+    if (data.expires_at && new Date(data.expires_at).getTime() <= Date.now()) {
+      await db.from('vip_users').delete().eq('email', email); // expire: list se remove
+      return null;
+    }
+    return { expiresAt: data.expires_at || null };
+  } catch (e) { return null; }
+}
 const displayName = u => (u && u.user_metadata && u.user_metadata.name) || ((u && u.email) || 'user').split('@')[0];
 
 function send(res, code, body) {
@@ -56,4 +72,4 @@ async function activeGrant(userId, episodeId) {
   return data || null;
 }
 
-module.exports = { db, cfg, missing, UUID, getUser, isAdmin, displayName, send, fail, episodeKey, activeGrant, crypto };
+module.exports = { db, cfg, missing, UUID, getUser, isAdmin, vipInfo, displayName, send, fail, episodeKey, activeGrant, crypto };

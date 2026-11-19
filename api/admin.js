@@ -17,7 +17,13 @@ module.exports = async (req, res) => {
           .eq('resolved', false).order('created_at', { ascending: false }).limit(50);
         reports = r.data || [];
       } catch (e) { /* table abhi nahi bani */ }
-      return send(res, 200, { anime: data || [], settings: await loadSettings(db), reports });
+      let vips = [];
+      try {
+        await db.from('vip_users').delete().lt('expires_at', new Date().toISOString()); // expire hue VIP list se hat jaate hain
+        const v = await db.from('vip_users').select('email,note,expires_at,created_at').order('created_at', { ascending: false });
+        vips = v.data || [];
+      } catch (e) { /* table abhi nahi bani */ }
+      return send(res, 200, { anime: data || [], settings: await loadSettings(db), reports, vips });
     }
     if (req.method !== 'POST') return fail(res, 405, 'Method not allowed');
 
@@ -74,6 +80,24 @@ module.exports = async (req, res) => {
         const { error } = await db.from('settings').upsert(rows, { onConflict: 'key' });
         if (error) return fail(res, 500, 'Settings were not saved. Did you run update1.sql in Supabase? (' + error.message + ')');
       }
+      return send(res, 200, { ok: true });
+    }
+
+    if (b.action === 'addVip') {
+      const email = String(b.email || '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 120) return fail(res, 400, 'Enter a valid email');
+      const days = parseInt(b.days, 10);
+      if (b.days !== '' && b.days != null && !(days >= 1 && days <= 3650)) return fail(res, 400, 'Days must be between 1 and 3650 (or leave empty for lifetime)');
+      const expires_at = days >= 1 ? new Date(Date.now() + days * 86400000).toISOString() : null;
+      const { error } = await db.from('vip_users').upsert({ email, note: txt(b.note, 80), expires_at }, { onConflict: 'email' });
+      if (error) return fail(res, 500, 'Could not add VIP. Did you run update3.sql in Supabase? (' + error.message + ')');
+      return send(res, 200, { ok: true });
+    }
+    if (b.action === 'removeVip') {
+      const email = String(b.email || '').trim().toLowerCase();
+      if (!email) return fail(res, 400, 'Bad email');
+      const { error } = await db.from('vip_users').delete().eq('email', email);
+      if (error) return fail(res, 500, error.message);
       return send(res, 200, { ok: true });
     }
 

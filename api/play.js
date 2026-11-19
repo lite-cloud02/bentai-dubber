@@ -5,7 +5,7 @@ module.exports = async (req, res) => {
     if (!user) return fail(res, 401, 'Please log in first');
     const e = req.query.e;
     if (!UUID.test(e || '')) return fail(res, 400, 'Bad episode');
-    const grant = isAdmin(user) ? { expires_at: new Date(Date.now() + 2 * 3600 * 1000).toISOString() } : await activeGrant(user.id, e); // admin: no link needed
+    const grant = await activeGrant(user.id, e);
     if (!grant) return fail(res, 403, 'locked');
     const { data: ep } = await db.from('episodes').select('id,title,number,anime_id,anime(title,poster_url)').eq('id', e).maybeSingle();
     if (!ep) return fail(res, 404, 'Episode not found');
