@@ -310,5 +310,5 @@ h1,h2,h3,.brand,.auth-brand,.splash-mark{font-family:"Plus Jakarta Sans",Inter,s
 .sicon[hidden]{display:none}
 .sicon svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
 /* page background image */
-body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:0;transition:opacity .35s;background:linear-gradient(rgba(9,9,13,.74),rgba(9,9,13,.88)),var(--bg-img,none) center/cover no-repeat}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:0;transition:opacity .35s;background:linear-gradient(rgba(9,9,13,.28),rgba(9,9,13,.55)),var(--bg-img,none) center/cover no-repeat}
 body[data-bg]::before{opacity:1}
