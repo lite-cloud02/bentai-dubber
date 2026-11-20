@@ -251,7 +251,7 @@ h1,h2,h3,.brand,.auth-brand,.splash-mark{font-family:"Plus Jakarta Sans",Inter,s
 
 /* logo image */
 .brand img.logo{width:38px;height:38px;border-radius:11px;object-fit:cover;border:0;background:none}
-.splash-logo{width:128px;height:128px;border-radius:30px}
+.splash-logo{width:180px;height:180px;border-radius:30px}
 .auth-logo{display:block;width:110px;height:110px;border-radius:26px;margin:0 auto 14px}
 .auth-sub{text-align:center}
 /* detail page */
