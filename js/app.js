@@ -66,9 +66,19 @@ const fmtV = n => n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M' : n 
 function posterHtml(a) {
   return a.poster_url ? `<img src="${esc(a.poster_url)}" alt="${esc(a.title)}" loading="lazy">` : `<span class="ph">${esc((a.title || '?')[0])}</span>`;
 }
+/* ---------- page background (img/bg/home.jpg, me.jpg, auth.jpg) ---------- */
+const BG_VER = 1; // image badalne ke baad browser purani dikhaye to ye number badha do
+function setBg(name) {
+  const b = document.body;
+  if (!name || name === 'none') { b.removeAttribute('data-bg'); return; }
+  b.style.setProperty('--bg-img', `url("img/bg/${name}.jpg?v=${BG_VER}")`);
+  b.setAttribute('data-bg', name);
+}
 function chrome(show, tab) {
   nav.hidden = topbar.hidden = !show; renderFoot(show); const av = $('#topAvatar'); if (av && me) av.textContent = (me.name || '?')[0].toUpperCase();
+  const ts = $('#topSearch'); if (ts) ts.hidden = tab === 'search'; // Search page par icon nahi, wahan search bar hai
   nav.querySelectorAll('a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
+  setBg(show ? (tab === 'me' ? 'me' : 'home') : 'auth'); // login/signup = auth, account = me, baaki = home
 }
 function showModal(html) { modal.innerHTML = `<div class="sheet">${html}</div>`; modal.hidden = false; }
 function closeModal() { modal.hidden = true; modal.innerHTML = ''; }
@@ -167,18 +177,19 @@ function authScreen(mode) {
 }
 
 /* ---------- home ---------- */
-async function home() {
-  stopPlayer(); chrome(true, 'home'); loading('Loading anime...');
+async function home(searchMode) {
+  // Home: header mein search icon, bada search bar nahi. Search page: search bar + chips + sirf anime thumbnails.
+  stopPlayer(); chrome(true, searchMode ? 'search' : 'home'); loading('Loading anime...');
   try {
     const { anime, latest } = await api('anime');
     const gOf = a => String(a.genre || '').split(',').map(x => x.trim()).filter(Boolean);
     const genres = [...new Set(anime.flatMap(gOf))].sort();
     let gsel = 'All';
     app.innerHTML = `<section class="page">
-      ${bannerHtml()}
-      <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="q" placeholder="Search anime..." autocomplete="off"></div>
+      ${searchMode ? '' : bannerHtml()}
+      ${searchMode ? `<div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="q" placeholder="Search anime..." autocomplete="off"></div>` : ''}
       ${genres.length ? `<div class="chips" id="chips">${['All', ...genres].map(g => `<button class="chipb ${g === 'All' ? 'on' : ''}" data-g="${esc(g)}">${esc(g)}</button>`).join('')}</div>` : ''}
-      ${latest && latest.length ? `<h2 class="h2s">New episodes</h2><div class="hrow">${latest.map(e => { const an = e.anime || {}; return `<button class="lt" data-id="${e.id}">
+      ${!searchMode && latest && latest.length ? `<h2 class="h2s">New episodes</h2><div class="hrow">${latest.map(e => { const an = e.anime || {}; return `<button class="lt" data-id="${e.id}">
         <div class="ltp">${an.poster_url ? `<img src="${esc(an.poster_url)}" alt="" loading="lazy">` : ''}<b class="num">Ep ${e.number}</b></div>
         <div class="ltt"><b>${esc(e.title)}</b><small>${esc(an.title || '')}</small></div></button>`; }).join('')}</div>` : ''}
       <h2 class="h2s">All anime</h2>
@@ -186,19 +197,19 @@ async function home() {
       </section>`;
     const grid = $('#grid');
     const draw = () => {
-      const q = $('#q').value.trim().toLowerCase();
+      const q = searchMode ? $('#q').value.trim().toLowerCase() : '';
       const rows = anime.filter(a => a.title.toLowerCase().includes(q) && (gsel === 'All' || gOf(a).includes(gsel)));
       grid.innerHTML = rows.length ? rows.map(a => `<a class="card" href="#/anime/${a.id}">
         <div class="poster">${posterHtml(a)}<b class="badge">${a.episodeCount} ep</b></div>
         <div class="card-t"><h3>${esc(a.title)}</h3><small>${esc(a.genre)}</small></div></a>`).join('')
         : `<p class="empty">${anime.length ? 'No anime found for that search.' : 'No anime added yet.'}</p>`;
     };
-    $('#q').addEventListener('input', draw);
+    if (searchMode) $('#q').addEventListener('input', draw);
     app.querySelectorAll('.chipb').forEach(b => b.onclick = () => {
       gsel = b.dataset.g; app.querySelectorAll('.chipb').forEach(x => x.classList.toggle('on', x === b)); draw();
     });
     app.querySelectorAll('.lt').forEach(b => b.onclick = () => askUnlock(b.dataset.id));
-    draw(); maybePopup();
+    draw(); if (!searchMode) maybePopup();
   } catch (e) { app.innerHTML = `<div class="center"><p>${esc(e.message)}</p></div>`; }
 }
 
@@ -298,7 +309,7 @@ function friendlyError(d) {
 }
 
 async function watch(id) {
-  stopPlayer(); chrome(true, 'home'); loading('Preparing video...');
+  stopPlayer(); chrome(true, 'home'); setBg('none'); loading('Preparing video...'); // video page par background nahi
   let info;
   try { info = await api('play?e=' + encodeURIComponent(id)); }
   catch (e) {
@@ -582,7 +593,7 @@ function route() {
   const h = location.hash.replace(/^#\/?/, '').split('/');
   if (h[0] === 'anime' && h[1]) return animePage(h[1]);
   if (h[0] === 'watch' && h[1]) return watch(h[1]);
-  if (h[0] === 'search') return home().then(() => { nav.querySelectorAll('a').forEach(a => a.classList.toggle('on', a.dataset.tab === 'search')); const q = $('#q'); if (q) q.focus(); });
+  if (h[0] === 'search') return home(true).then(() => { const q = $('#q'); if (q) q.focus(); });
   if (h[0] === 'me') return meScreen();
   if (h[0] === 'about') return aboutScreen();
   return home();
