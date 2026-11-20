@@ -71,7 +71,7 @@ const BG_VER = 1; // image badalne ke baad browser purani dikhaye to ye number b
 function setBg(name) {
   const b = document.body;
   if (!name || name === 'none') { b.removeAttribute('data-bg'); return; }
-  b.style.setProperty('--bg-img', `url("img/bg/${name}.jpg?v=${BG_VER}")`);
+  b.style.setProperty('--bg-img', `url("/img/bg/${name}.jpg?v=${BG_VER}")`);
   b.setAttribute('data-bg', name);
 }
 function chrome(show, tab) {
