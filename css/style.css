@@ -385,3 +385,27 @@ body{background:var(--bg);padding-bottom:calc(96px + env(safe-area-inset-bottom)
 /* background: upar image saaf, neeche gehra parda */
 body::before{background:linear-gradient(rgba(7,6,13,.08) 0%,rgba(7,6,13,.28) 30%,rgba(7,6,13,.86) 68%,rgba(7,6,13,.95) 100%),var(--bg-img,none) center top/cover no-repeat}
 body[data-bg="me"]::before,body[data-bg="auth"]::before{background:linear-gradient(rgba(7,6,13,.5),rgba(7,6,13,.9)),var(--bg-img,none) center top/cover no-repeat}
+
+/* card title (thumbnail ke neeche) + account page social */
+.ct{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:7px 3px 2px;font-size:14px;font-weight:700;line-height:1.3;color:var(--text);text-shadow:0 1px 6px rgba(0,0,0,.8)}
+.me-soc{max-width:340px;margin:20px auto 0}
+.me-soc .dr-sec{text-align:center}
+
+/* video page: NOW PLAYING label + 16:9 series card */
+.np{display:flex;align-items:center;gap:12px;min-width:0}
+.eq{display:flex;align-items:flex-end;gap:3px;height:20px;flex:none}
+.eq b{width:4px;height:100%;border-radius:2px;background:linear-gradient(var(--v),#a43bff);transform-origin:bottom;animation:eq 1s ease-in-out infinite}
+.eq b:nth-child(2){animation-delay:-.4s}.eq b:nth-child(3){animation-delay:-.75s}
+@keyframes eq{0%,100%{transform:scaleY(.25)}50%{transform:scaleY(1)}}
+.np.off .eq b{animation-play-state:paused}
+.npt{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+.npt small{font-size:10px;font-weight:700;letter-spacing:.22em;color:var(--v)}
+.npt b{font-size:18px;font-weight:700;color:#fff}
+.live{gap:14px;margin-top:18px}
+.liveimg{width:160px;aspect-ratio:16/9;display:grid;place-items:center}
+.liveimg img{object-position:center 30%}
+.liveimg .ph{font-size:30px}
+.livetxt{display:flex;flex-direction:column;gap:3px;min-width:0;font-size:14px;font-weight:400}
+.livetxt small{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.livetxt b{font-size:16px;font-weight:700;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.livetxt em{font-style:normal;font-size:13px;font-weight:600;color:var(--v)}
