@@ -180,7 +180,7 @@ const gOf = a => String(a.genre || '').split(',').map(x => x.trim()).filter(Bool
 const CHEV = '<svg viewBox="0 0 24 24"><path d="M7 6l6 6-6 6M13 6l6 6-6 6"/></svg>';
 let GENRES = [], genreSel = null, HOME = null;
 const thumb = a => a.poster_url ? `<img src="${esc(a.poster_url)}" alt="${esc(a.title || '')}" loading="lazy" decoding="async">` : `<span class="ph">${esc((a.title || '?')[0])}</span>`;
-const epCard = e => { const an = e.anime || {}; return `<button class="c16 ep-c" data-id="${e.id}" aria-label="${esc(an.title || e.title || '')} episode ${e.number}"><div class="t16">${thumb(an)}<b class="tpill">Ep ${e.number}</b></div></button>`; };
+const epCard = e => { const an = e.anime || {}; return `<button class="c16 ep-c" data-id="${e.id}" aria-label="${esc(an.title || e.title || '')} episode ${e.number}"><div class="t16">${thumb(an)}<b class="tpill">Ep ${e.number}</b></div><span class="ct">${esc(an.title || e.title || '')}</span></button>`; };
 const secHead = (title, href) => `<div class="sec"><i></i><h2>${title}</h2>${href ? `<a class="more" href="${href}" aria-label="See all">${CHEV}</a>` : ''}</div>`;
 
 async function home(searchMode) {
@@ -204,7 +204,7 @@ async function home(searchMode) {
     const draw = () => {
       const q = searchMode ? $('#q').value.trim().toLowerCase() : '';
       const rows = anime.filter(a => a.title.toLowerCase().includes(q) && (gsel === 'All' || gOf(a).includes(gsel)));
-      grid.innerHTML = rows.length ? rows.map(a => `<a class="c16" href="#/anime/${a.id}" aria-label="${esc(a.title)}"><div class="t16">${thumb(a)}<b class="tpill">${a.episodeCount} ep</b></div></a>`).join('')
+      grid.innerHTML = rows.length ? rows.map(a => `<a class="c16" href="#/anime/${a.id}" aria-label="${esc(a.title)}"><div class="t16">${thumb(a)}<b class="tpill">${a.episodeCount} ep</b></div><span class="ct">${esc(a.title)}</span></a>`).join('')
         : `<p class="empty">${anime.length ? 'No anime found for that search.' : 'No anime added yet.'}</p>`;
     };
     const select = g => {
@@ -358,7 +358,7 @@ async function watch(id) {
   }
 
   app.innerHTML = `<section class="watch"><div class="wgrid"><div class="wmain">
-    <div class="wtop"><a class="backc" href="#/anime/${esc(info.animeId)}" aria-label="Back"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M13.5 8l-4 4 4 4"/></svg></a><span class="sl">/</span><span class="eptag">EPISODE ${esc(info.number)}</span></div>
+    <div class="wtop"><a class="backc" href="#/anime/${esc(info.animeId)}" aria-label="Back"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M13.5 8l-4 4 4 4"/></svg></a><div class="np off" id="np"><i class="eq"><b></b><b></b><b></b></i><span class="npt"><small>NOW PLAYING</small><b>Episode ${esc(info.number)}</b></span></div></div>
     <div class="player" id="pl">
       <video id="vid" playsinline webkit-playsinline preload="auto" disablePictureInPicture controlsList="nodownload noremoteplayback"></video>
       <div class="wm" id="wm">${esc(info.watermark)}</div>
@@ -395,7 +395,7 @@ async function watch(id) {
       <div class="wact"><button class="pill nx" id="nextbtn" hidden>Next episode &rsaquo;</button></div>
       
     </div></div>
-    <aside class="upnext"><div class="epcard"><div class="eph"><span>EPISODES</span><div class="epnav"><button id="epPrev" aria-label="Previous episode" disabled>&lsaquo;</button><button id="epNext" aria-label="Next episode" disabled>&rsaquo;</button></div></div><div class="epchips" id="upl"><span class="muted">Loading...</span></div></div><p class="vnote">Every episode needs its own verification. After unlocking, it stays open for 60 minutes.</p><a class="live" href="#/anime/${esc(info.animeId)}"><span class="liveimg">${posterHtml({ poster_url: info.animePoster, title: info.animeTitle })}</span><span class="livetxt">Live Episode</span></a><span id="left" hidden></span></aside>
+    <aside class="upnext"><div class="epcard"><div class="eph"><span>EPISODES</span><div class="epnav"><button id="epPrev" aria-label="Previous episode" disabled>&lsaquo;</button><button id="epNext" aria-label="Next episode" disabled>&rsaquo;</button></div></div><div class="epchips" id="upl"><span class="muted">Loading...</span></div></div><p class="vnote">Every episode needs its own verification. After unlocking, it stays open for 60 minutes.</p><a class="live" href="#/anime/${esc(info.animeId)}"><span class="liveimg">${posterHtml({ poster_url: info.animePoster, title: info.animeTitle })}</span><span class="livetxt"><small>Full series</small><b>${esc(info.animeTitle)}</b><em>View all episodes &rsaquo;</em></span></a><span id="left" hidden></span></aside>
   </div></section>`;
 
   const video = $('#vid'), pl = $('#pl'), wm = $('#wm'), ctrls = $('#ctrls'), pp = $('#pp'), seek = $('#seek'), menu = $('#menu');
@@ -403,6 +403,10 @@ async function watch(id) {
   const P = player = { hls: null, timer: null, wmTimer: null, hideT: null, recovered: false, done: false, next: null };
   let dragging = false;
   pl.addEventListener('contextmenu', e => e.preventDefault());
+  const np = $('#np'); // "NOW PLAYING" bars sirf tab chalte hain jab video sach mein chal raha ho
+  video.addEventListener('playing', () => np.classList.remove('off'));
+  video.addEventListener('pause', () => np.classList.add('off'));
+  video.addEventListener('ended', () => np.classList.add('off'));
 
   /* --- agle episodes (YouTube ke "up next" jaisa) --- */
   api('anime?id=' + encodeURIComponent(info.animeId)).then(r => {
@@ -605,7 +609,7 @@ function meScreen() {
   stopPlayer(); chrome(true, 'me');
   app.innerHTML = `<section class="page"><div class="me"><div class="avatar">${esc((me.name || '?')[0].toUpperCase())}</div>
     <h2>${esc(me.name)}</h2><p class="muted">${esc(me.email)}</p></div>
-    
+    ${socialList() ? `<div class="me-soc"><div class="dr-sec">Follow us</div><div class="dr-soc">${socialList()}</div></div>` : ''}
     ${me.isAdmin ? '<a class="btn" href="admin.html">Admin panel</a>' : ''}
     <button class="btn ghost" id="out">Logout</button>
     </section>`;
