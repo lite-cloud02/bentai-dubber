@@ -5,14 +5,13 @@ let me = null, pendingToken = null, player = null, S = {};
 const okUrl = u => /^https?:\/\//i.test(u || '');
 async function loadSettings() { try { S = await api('settings'); } catch (e) { S = {}; } }
 const SOC_IC = { telegram: '<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>', whatsapp: '<path d="M21 11.5a8.4 8.4 0 0 1-12.6 7.3L3 20l1.3-5A8.4 8.4 0 1 1 21 11.5z"/>', instagram: '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.5 6.5h.01"/>', youtube: '<path d="M22 8.2a3 3 0 0 0-2-2C18.2 5.7 12 5.7 12 5.7s-6.2 0-8 .5a3 3 0 0 0-2 2C1.5 10 1.5 12 1.5 12s0 2 .5 3.8a3 3 0 0 0 2 2c1.8.5 8 .5 8 .5s6.2 0 8-.5a3 3 0 0 0 2-2c.5-1.8.5-3.8.5-3.8s0-2-.5-3.8z"/><path d="M10 15V9l5 3z"/>', support: '<path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M3 14h3v5H4a1 1 0 0 1-1-1zM21 14h-3v5h2a1 1 0 0 0 1-1z"/>' };
-function socialRow() {
+function socialList() {
   const items = [['telegram', 'Telegram'], ['whatsapp', 'WhatsApp'], ['instagram', 'Instagram'], ['youtube', 'YouTube'], ['support', S.support_label || 'Support']];
-  const h = items.filter(i => okUrl(S[i[0]])).map(i => `<a class="soc" href="${esc(S[i[0]])}" target="_blank" rel="noopener noreferrer" aria-label="${esc(i[1])}" title="${esc(i[1])}"><svg viewBox="0 0 24 24">${SOC_IC[i[0]]}</svg></a>`).join('');
-  return h ? `<div class="socrow">${h}</div>` : '';
+  return items.filter(i => okUrl(S[i[0]])).map(i => `<a class="dsoc" href="${esc(S[i[0]])}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24">${SOC_IC[i[0]]}</svg>${esc(i[1])}</a>`).join('');
 }
 function renderFoot(show) {
   const f = $('#siteFoot'); if (!f) return;
-  f.innerHTML = `${socialRow()}${show ? '<p class="flinks"><a href="#/about">Disclaimer</a><a href="#/about">DMCA</a><a href="#/about">Contact</a></p>' : ''}<p class="copy">&copy; ${new Date().getFullYear()} Bentai. All rights reserved.</p>`;
+  f.innerHTML = `${show ? '<p class="flinks"><a href="#/about">Disclaimer</a><a href="#/about">DMCA</a><a href="#/about">Contact</a></p>' : ''}<p class="copy">&copy; ${new Date().getFullYear()} Bentai. All rights reserved.</p>`;
 }
 function bannerHtml() {
   if (!S.announce_text) return '';
@@ -177,41 +176,79 @@ function authScreen(mode) {
 }
 
 /* ---------- home ---------- */
+const gOf = a => String(a.genre || '').split(',').map(x => x.trim()).filter(Boolean);
+const CHEV = '<svg viewBox="0 0 24 24"><path d="M7 6l6 6-6 6M13 6l6 6-6 6"/></svg>';
+let GENRES = [], genreSel = null, HOME = null;
+const thumb = a => a.poster_url ? `<img src="${esc(a.poster_url)}" alt="${esc(a.title || '')}" loading="lazy" decoding="async">` : `<span class="ph">${esc((a.title || '?')[0])}</span>`;
+const epCard = e => { const an = e.anime || {}; return `<button class="c16 ep-c" data-id="${e.id}" aria-label="${esc(an.title || e.title || '')} episode ${e.number}"><div class="t16">${thumb(an)}<b class="tpill">Ep ${e.number}</b></div></button>`; };
+const secHead = (title, href) => `<div class="sec"><i></i><h2>${title}</h2>${href ? `<a class="more" href="${href}" aria-label="See all">${CHEV}</a>` : ''}</div>`;
+
 async function home(searchMode) {
-  // Home: header mein search icon, bada search bar nahi. Search page: search bar + chips + sirf anime thumbnails.
+  // Home: header mein search icon, chips, New episodes (4) aur All anime. Search page: search bar + chips + anime thumbnails.
   stopPlayer(); chrome(true, searchMode ? 'search' : 'home'); loading('Loading anime...');
   try {
     const { anime, latest } = await api('anime');
-    const gOf = a => String(a.genre || '').split(',').map(x => x.trim()).filter(Boolean);
     const genres = [...new Set(anime.flatMap(gOf))].sort();
-    let gsel = 'All';
-    app.innerHTML = `<section class="page">
+    GENRES = genres;
+    let gsel = (!searchMode && genreSel && genres.includes(genreSel)) ? genreSel : 'All';
+    genreSel = null;
+    app.innerHTML = `<section class="page home">
       ${searchMode ? '' : bannerHtml()}
       ${searchMode ? `<div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="q" placeholder="Search anime..." autocomplete="off"></div>` : ''}
-      ${genres.length ? `<div class="chips" id="chips">${['All', ...genres].map(g => `<button class="chipb ${g === 'All' ? 'on' : ''}" data-g="${esc(g)}">${esc(g)}</button>`).join('')}</div>` : ''}
-      ${!searchMode && latest && latest.length ? `<h2 class="h2s">New episodes</h2><div class="hrow">${latest.map(e => { const an = e.anime || {}; return `<button class="lt" data-id="${e.id}">
-        <div class="ltp">${an.poster_url ? `<img src="${esc(an.poster_url)}" alt="" loading="lazy">` : ''}<b class="num">Ep ${e.number}</b></div>
-        <div class="ltt"><b>${esc(e.title)}</b><small>${esc(an.title || '')}</small></div></button>`; }).join('')}</div>` : ''}
-      <h2 class="h2s">All anime</h2>
-      <div class="grid" id="grid"></div>
+      ${genres.length ? `<div class="chips" id="chips">${['All', ...genres].map(g => `<button class="chipb ${g === gsel ? 'on' : ''}" data-g="${esc(g)}">${esc(g)}</button>`).join('')}</div>` : ''}
+      ${!searchMode && latest && latest.length ? `${secHead('New episodes', '#/new')}<div class="grid16">${latest.slice(0, 4).map(epCard).join('')}</div>` : ''}
+      ${secHead('All anime', searchMode ? '' : '#/search')}
+      <div class="grid16" id="grid"></div>
       </section>`;
     const grid = $('#grid');
     const draw = () => {
       const q = searchMode ? $('#q').value.trim().toLowerCase() : '';
       const rows = anime.filter(a => a.title.toLowerCase().includes(q) && (gsel === 'All' || gOf(a).includes(gsel)));
-      grid.innerHTML = rows.length ? rows.map(a => `<a class="card" href="#/anime/${a.id}">
-        <div class="poster">${posterHtml(a)}<b class="badge">${a.episodeCount} ep</b></div>
-        <div class="card-t"><h3>${esc(a.title)}</h3><small>${esc(a.genre)}</small></div></a>`).join('')
+      grid.innerHTML = rows.length ? rows.map(a => `<a class="c16" href="#/anime/${a.id}" aria-label="${esc(a.title)}"><div class="t16">${thumb(a)}<b class="tpill">${a.episodeCount} ep</b></div></a>`).join('')
         : `<p class="empty">${anime.length ? 'No anime found for that search.' : 'No anime added yet.'}</p>`;
     };
+    const select = g => {
+      gsel = g; app.querySelectorAll('.chipb').forEach(x => x.classList.toggle('on', x.dataset.g === g)); draw();
+    };
     if (searchMode) $('#q').addEventListener('input', draw);
-    app.querySelectorAll('.chipb').forEach(b => b.onclick = () => {
-      gsel = b.dataset.g; app.querySelectorAll('.chipb').forEach(x => x.classList.toggle('on', x === b)); draw();
-    });
-    app.querySelectorAll('.lt').forEach(b => b.onclick = () => askUnlock(b.dataset.id));
+    app.querySelectorAll('.chipb').forEach(b => b.onclick = () => select(b.dataset.g));
+    app.querySelectorAll('.ep-c').forEach(b => b.onclick = () => askUnlock(b.dataset.id));
+    HOME = searchMode ? null : { root: app.firstElementChild, select };
     draw(); if (!searchMode) maybePopup();
   } catch (e) { app.innerHTML = `<div class="center"><p>${esc(e.message)}</p></div>`; }
 }
+
+/* ---------- New episodes (poori list) ---------- */
+async function newPage() {
+  stopPlayer(); chrome(true, 'home'); loading('Loading...');
+  try {
+    const { latest } = await api('anime');
+    app.innerHTML = `<section class="page home">${secHead('New episodes', '')}
+      ${latest && latest.length ? `<div class="grid16">${latest.map(epCard).join('')}</div>` : '<p class="empty">No new episodes right now.</p>'}</section>`;
+    app.querySelectorAll('.ep-c').forEach(b => b.onclick = () => askUnlock(b.dataset.id));
+  } catch (e) { app.innerHTML = `<div class="center"><p>${esc(e.message)}</p></div>`; }
+}
+
+/* ---------- menu (3 lines): tags + social links ---------- */
+const drawer = $('#drawer'), drawerBg = $('#drawerBg');
+function closeMenu() { drawer.classList.remove('open'); drawerBg.hidden = true; }
+async function openMenu() {
+  if (!GENRES.length) { try { const { anime } = await api('anime'); GENRES = [...new Set(anime.flatMap(gOf))].sort(); } catch (e) { /* ignore */ } }
+  $('#drTags').innerHTML = GENRES.length ? GENRES.map(g => `<button class="dtag" data-g="${esc(g)}">${esc(g)}</button>`).join('') : '<p class="muted">No tags yet.</p>';
+  $('#drSoc').innerHTML = socialList() || '<p class="muted">No links yet.</p>';
+  drawerBg.hidden = false; drawer.classList.add('open');
+}
+function pickTag(g) {
+  closeMenu();
+  if (HOME && app.contains(HOME.root)) { HOME.select(g); window.scrollTo(0, 0); return; } // home par hi ho to seedha filter
+  genreSel = g;
+  if (location.hash === '' || location.hash === '#/' || location.hash === '#') home(); else location.hash = '#/';
+}
+$('#menuBtn').onclick = openMenu;
+$('#drClose').onclick = closeMenu;
+drawerBg.onclick = closeMenu;
+$('#drTags').onclick = ev => { const b = ev.target.closest('.dtag'); if (b) pickTag(b.dataset.g); };
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeMenu(); });
 
 /* ---------- anime page ---------- */
 async function animePage(id) {
@@ -594,11 +631,12 @@ function route() {
   if (h[0] === 'anime' && h[1]) return animePage(h[1]);
   if (h[0] === 'watch' && h[1]) return watch(h[1]);
   if (h[0] === 'search') return home(true).then(() => { const q = $('#q'); if (q) q.focus(); });
+  if (h[0] === 'new') return newPage();
   if (h[0] === 'me') return meScreen();
   if (h[0] === 'about') return aboutScreen();
   return home();
 }
-window.addEventListener('hashchange', () => { closeModal(); route(); });
+window.addEventListener('hashchange', () => { closeModal(); closeMenu(); route(); });
 
 async function boot(session) {
   if (!session) { me = null; return authScreen('login'); }
