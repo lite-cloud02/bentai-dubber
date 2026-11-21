@@ -434,3 +434,8 @@ body[data-bg="me"]::before,body[data-bg="auth"]::before{background:linear-gradie
 .hslide{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .hslide::-webkit-scrollbar{display:none}
 .hslide .c16{flex:none;width:min(74vw,320px);scroll-snap-align:start}
+
+/* login page: peeche ki image saaf dikhe */
+.auth{background:rgba(13,8,24,.26);border-color:rgba(255,255,255,.2)}
+.auth label,.auth-sub,.auth .tabs button{text-shadow:0 1px 6px rgba(0,0,0,.75)}
+body[data-bg="auth"]::before{background:linear-gradient(rgba(7,6,13,0),rgba(7,6,13,.22)),var(--bg-img,none) center top/cover no-repeat}
