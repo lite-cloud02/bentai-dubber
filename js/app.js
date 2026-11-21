@@ -178,34 +178,47 @@ function authScreen(mode) {
 /* ---------- home ---------- */
 const gOf = a => String(a.genre || '').split(',').map(x => x.trim()).filter(Boolean);
 const CHEV = '<svg viewBox="0 0 24 24"><path d="M7 6l6 6-6 6M13 6l6 6-6 6"/></svg>';
-let GENRES = [], genreSel = null, HOME = null;
+let GENRES = [], genreSel = null, SEARCHPG = null;
+const BLOCK_Q = /^(episodes?|eps?)\s*\.?\s*#?\d*$/i; // "episode 1", "ep 2" search karne par kuch nahi dikhega
 const thumb = a => a.poster_url ? `<img src="${esc(a.poster_url)}" alt="${esc(a.title || '')}" loading="lazy" decoding="async">` : `<span class="ph">${esc((a.title || '?')[0])}</span>`;
 const epCard = e => { const an = e.anime || {}; return `<button class="c16 ep-c" data-id="${e.id}" aria-label="${esc(an.title || e.title || '')} episode ${e.number}"><div class="t16">${thumb({ poster_url: e.thumb_url || an.poster_url, title: an.title })}<b class="tpill">Ep ${e.number}</b></div><span class="ct">${esc(an.title || e.title || '')}</span></button>`; };
 const secHead = (title, href) => `<div class="sec"><i></i><h2>${title}</h2>${href ? `<a class="more" href="${href}" aria-label="See all">${CHEV}</a>` : ''}</div>`;
 
+const searchEpCard = (an, e) => `<button class="c16 ep-c" data-id="${e.id}" aria-label="${esc(e.title)}"><div class="t16">${thumb({ poster_url: e.thumb_url || an.poster_url, title: e.title })}<b class="tpill">Ep ${e.number}</b></div><span class="ct">${esc(e.title)}</span><span class="cg">${esc(an.title)}</span></button>`;
+
 async function home(searchMode) {
-  // Home: header mein search icon, chips, New episodes (4) aur All anime. Search page: search bar + chips + anime thumbnails.
+  // Home: banner + New episodes (slide) + All anime. Tags/chips sirf Search page par (aur 3-line menu mein).
   stopPlayer(); chrome(true, searchMode ? 'search' : 'home'); loading('Loading anime...');
   try {
     const { anime, latest } = await api('anime');
     const genres = [...new Set(anime.flatMap(gOf))].sort();
     GENRES = genres;
-    let gsel = (!searchMode && genreSel && genres.includes(genreSel)) ? genreSel : 'All';
+    let gsel = (searchMode && genreSel && genres.includes(genreSel)) ? genreSel : 'All';
     genreSel = null;
     app.innerHTML = `<section class="page home">
       ${searchMode ? '' : bannerHtml()}
-      ${searchMode ? `<div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="q" placeholder="Search anime..." autocomplete="off"></div>` : ''}
-      ${genres.length ? `<div class="chips" id="chips">${['All', ...genres].map(g => `<button class="chipb ${g === gsel ? 'on' : ''}" data-g="${esc(g)}">${esc(g)}</button>`).join('')}</div>` : ''}
-      ${!searchMode && latest && latest.length ? `${secHead('New episodes', '#/new')}<div class="grid16">${latest.slice(0, 4).map(epCard).join('')}</div>` : ''}
+      ${searchMode ? `<div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="q" placeholder="Search anime or episode..." autocomplete="off"></div>` : ''}
+      ${searchMode && genres.length ? `<div class="chips" id="chips">${['All', ...genres].map(g => `<button class="chipb ${g === gsel ? 'on' : ''}" data-g="${esc(g)}">${esc(g)}</button>`).join('')}</div>` : ''}
+      ${!searchMode && latest && latest.length ? `${secHead('New episodes', '')}<div class="hslide">${latest.map(epCard).join('')}</div>` : ''}
       ${secHead('All anime', searchMode ? '' : '#/search')}
       <div class="grid16" id="grid"></div>
+      <div id="epres"></div>
       </section>`;
-    const grid = $('#grid');
+    const grid = $('#grid'), epres = $('#epres');
     const draw = () => {
       const q = searchMode ? $('#q').value.trim().toLowerCase() : '';
-      const rows = anime.filter(a => a.title.toLowerCase().includes(q) && (gsel === 'All' || gOf(a).includes(gsel)));
+      const inG = a => gsel === 'All' || gOf(a).includes(gsel);
+      let rows = [], epRows = [];
+      if (!(q && BLOCK_Q.test(q))) {
+        rows = anime.filter(a => a.title.toLowerCase().includes(q) && inG(a));
+        if (q) epRows = anime.filter(inG).flatMap(a => (a.eps || []).filter(e => String(e.title).toLowerCase().includes(q)).map(e => ({ a, e })));
+      }
       grid.innerHTML = rows.length ? rows.map(a => `<a class="c16" href="#/anime/${a.id}" aria-label="${esc(a.title)}"><div class="t16 port">${thumb(a)}<b class="tpill">${a.episodeCount} ep</b></div><span class="ct">${esc(a.title)}</span><span class="cg">${esc(gOf(a).slice(0, 3).join(', '))}</span></a>`).join('')
-        : `<p class="empty">${anime.length ? 'No anime found for that search.' : 'No anime added yet.'}</p>`;
+        : (epRows.length ? '' : `<p class="empty">${anime.length ? 'No results found.' : 'No anime added yet.'}</p>`);
+      if (epres) {
+        epres.innerHTML = epRows.length ? `${secHead('Episodes', '')}<div class="grid16">${epRows.map(x => searchEpCard(x.a, x.e)).join('')}</div>` : '';
+        epres.querySelectorAll('.ep-c').forEach(b => b.onclick = () => askUnlock(b.dataset.id));
+      }
     };
     const select = g => {
       gsel = g; app.querySelectorAll('.chipb').forEach(x => x.classList.toggle('on', x.dataset.g === g)); draw();
@@ -213,7 +226,7 @@ async function home(searchMode) {
     if (searchMode) $('#q').addEventListener('input', draw);
     app.querySelectorAll('.chipb').forEach(b => b.onclick = () => select(b.dataset.g));
     app.querySelectorAll('.ep-c').forEach(b => b.onclick = () => askUnlock(b.dataset.id));
-    HOME = searchMode ? null : { root: app.firstElementChild, select };
+    SEARCHPG = searchMode ? { root: app.firstElementChild, select } : null;
     draw(); if (!searchMode) maybePopup();
   } catch (e) { app.innerHTML = `<div class="center"><p>${esc(e.message)}</p></div>`; }
 }
@@ -240,9 +253,9 @@ async function openMenu() {
 }
 function pickTag(g) {
   closeMenu();
-  if (HOME && app.contains(HOME.root)) { HOME.select(g); window.scrollTo(0, 0); return; } // home par hi ho to seedha filter
-  genreSel = g;
-  if (location.hash === '' || location.hash === '#/' || location.hash === '#') home(); else location.hash = '#/';
+  if (SEARCHPG && app.contains(SEARCHPG.root)) { SEARCHPG.select(g); window.scrollTo(0, 0); return; } // Search page par ho to seedha filter
+  genreSel = g; // warna Search page khulega, tag wahan selected dikhega
+  if (location.hash === '#/search') home(true); else location.hash = '#/search';
 }
 $('#menuBtn').onclick = openMenu;
 $('#drClose').onclick = closeMenu;
@@ -634,7 +647,7 @@ function route() {
   const h = location.hash.replace(/^#\/?/, '').split('/');
   if (h[0] === 'anime' && h[1]) return animePage(h[1]);
   if (h[0] === 'watch' && h[1]) return watch(h[1]);
-  if (h[0] === 'search') return home(true).then(() => { const q = $('#q'); if (q) q.focus(); });
+  if (h[0] === 'search') { const fromTag = !!genreSel; return home(true).then(() => { const q = $('#q'); if (q && !fromTag) q.focus(); }); }
   if (h[0] === 'new') return newPage();
   if (h[0] === 'me') return meScreen();
   if (h[0] === 'about') return aboutScreen();
