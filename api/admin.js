@@ -9,8 +9,10 @@ module.exports = async (req, res) => {
     if (await limited(req, res, 'admin:' + user.id, 120, 60)) return;
 
     if (req.method === 'GET') {
-      const { data } = await db.from('anime')
-        .select('id,title,genre,description,poster_url,episodes(id,title,number)').order('created_at', { ascending: false });
+      const aQ = cols => db.from('anime').select(cols).order('created_at', { ascending: false });
+      let ar = await aQ('id,title,genre,description,poster_url,episodes(id,title,number,thumb_url)');
+      if (ar.error) ar = await aQ('id,title,genre,description,poster_url,episodes(id,title,number)'); // update5.sql baaki
+      const data = ar.data;
       (data || []).forEach(a => (a.episodes || []).sort((x, y) => x.number - y.number));
       let reports = [];
       try {
@@ -50,15 +52,18 @@ module.exports = async (req, res) => {
       const title = txt(b.title, 120);
       if (!title) return fail(res, 400, 'Enter an episode title');
       const number = Math.max(1, parseInt(b.number, 10) || 1);
+      const thumb = txt(b.thumb_url, 500);
+      if (thumb && !/^https?:\/\//i.test(thumb)) return fail(res, 400, 'Thumbnail must be an image link starting with https://');
+      const thumbErr = m => (/thumb_url/.test(m || '') ? 'Run supabase/update5.sql in Supabase first (thumbnail column is missing).' : m);
       if (b.action === 'addEpisode') {
         if (!UUID.test(b.animeId || '')) return fail(res, 400, 'Select an anime');
-        const { data, error } = await db.from('episodes').insert({ anime_id: b.animeId, title, number }).select('id').single();
-        if (error) return fail(res, 500, error.message);
+        const { data, error } = await db.from('episodes').insert({ anime_id: b.animeId, title, number, thumb_url: thumb }).select('id').single();
+        if (error) return fail(res, 500, thumbErr(error.message));
         return send(res, 200, { id: data.id });
       }
       if (!UUID.test(b.id || '')) return fail(res, 400, 'Bad id');
-      const { error } = await db.from('episodes').update({ title, number }).eq('id', b.id);
-      if (error) return fail(res, 500, error.message);
+      const { error } = await db.from('episodes').update({ title, number, thumb_url: thumb }).eq('id', b.id);
+      if (error) return fail(res, 500, thumbErr(error.message));
       return send(res, 200, { ok: true });
     }
 
