@@ -180,7 +180,7 @@ const gOf = a => String(a.genre || '').split(',').map(x => x.trim()).filter(Bool
 const CHEV = '<svg viewBox="0 0 24 24"><path d="M7 6l6 6-6 6M13 6l6 6-6 6"/></svg>';
 let GENRES = [], genreSel = null, HOME = null;
 const thumb = a => a.poster_url ? `<img src="${esc(a.poster_url)}" alt="${esc(a.title || '')}" loading="lazy" decoding="async">` : `<span class="ph">${esc((a.title || '?')[0])}</span>`;
-const epCard = e => { const an = e.anime || {}; return `<button class="c16 ep-c" data-id="${e.id}" aria-label="${esc(an.title || e.title || '')} episode ${e.number}"><div class="t16">${thumb(an)}<b class="tpill">Ep ${e.number}</b></div><span class="ct">${esc(an.title || e.title || '')}</span></button>`; };
+const epCard = e => { const an = e.anime || {}; return `<button class="c16 ep-c" data-id="${e.id}" aria-label="${esc(an.title || e.title || '')} episode ${e.number}"><div class="t16">${thumb({ poster_url: e.thumb_url || an.poster_url, title: an.title })}<b class="tpill">Ep ${e.number}</b></div><span class="ct">${esc(an.title || e.title || '')}</span></button>`; };
 const secHead = (title, href) => `<div class="sec"><i></i><h2>${title}</h2>${href ? `<a class="more" href="${href}" aria-label="See all">${CHEV}</a>` : ''}</div>`;
 
 async function home(searchMode) {
@@ -204,7 +204,7 @@ async function home(searchMode) {
     const draw = () => {
       const q = searchMode ? $('#q').value.trim().toLowerCase() : '';
       const rows = anime.filter(a => a.title.toLowerCase().includes(q) && (gsel === 'All' || gOf(a).includes(gsel)));
-      grid.innerHTML = rows.length ? rows.map(a => `<a class="c16" href="#/anime/${a.id}" aria-label="${esc(a.title)}"><div class="t16">${thumb(a)}<b class="tpill">${a.episodeCount} ep</b></div><span class="ct">${esc(a.title)}</span></a>`).join('')
+      grid.innerHTML = rows.length ? rows.map(a => `<a class="c16" href="#/anime/${a.id}" aria-label="${esc(a.title)}"><div class="t16 port">${thumb(a)}<b class="tpill">${a.episodeCount} ep</b></div><span class="ct">${esc(a.title)}</span><span class="cg">${esc(gOf(a).slice(0, 3).join(', '))}</span></a>`).join('')
         : `<p class="empty">${anime.length ? 'No anime found for that search.' : 'No anime added yet.'}</p>`;
     };
     const select = g => {
@@ -265,7 +265,7 @@ async function animePage(id) {
       <p class="desc">${esc(anime.description)}</p>
       ${episodes.length ? '<button class="btn dp-start" id="startW"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Start watching</button>' : ''}
       <h2 class="h2">Episodes</h2>
-      <div class="eps">${episodes.length ? episodes.map(e => `<button class="ep" data-id="${e.id}"><span class="n">${e.number}</span><span class="t">${esc(e.title)}</span><span class="go">Watch</span></button>`).join('')
+      <div class="eps">${episodes.length ? episodes.map(e => `<button class="ep" data-id="${e.id}"><span class="ept">${thumb({ poster_url: e.thumb_url || anime.poster_url, title: e.title })}<b class="epn">E${e.number}</b></span><span class="epi"><small>${esc(anime.title)}</small><b>${esc(e.title)}</b><em>Dub</em></span></button>`).join('')
         : '<p class="empty">Episodes are coming soon.</p>'}</div></section>`;
     app.querySelectorAll('.ep').forEach(b => b.onclick = () => askUnlock(b.dataset.id));
     const sw = $('#startW'); if (sw) sw.onclick = () => askUnlock(episodes[0].id);
