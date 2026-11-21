@@ -140,14 +140,16 @@ function recoveryScreen() {
 }
 
 /* ---------- auth ---------- */
+const AUTH_GOOGLE = false; // Google login button: true = dikhao, false = chhupao
+const AUTH_SIGNUP = true;  // Sign up tab: true = dikhao, false = chhupao
 function authScreen(mode) {
   stopPlayer(); chrome(false);
-  const signup = mode === 'signup';
+  const signup = AUTH_SIGNUP && mode === 'signup';
   app.innerHTML = `<section class="auth">
     <img class="auth-logo" src="img/logo.png" alt="Bentai Dubber">
     <p class="auth-sub">${signup ? 'Create an account and watch dubbed anime.' : 'Log in and watch dubbed anime.'}</p>
-    <div class="tabs"><button class="${signup ? '' : 'on'}" data-m="login">Login</button><button class="${signup ? 'on' : ''}" data-m="signup">Sign up</button></div>
-    <button type="button" class="gbtn" id="aGoogle"><svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 0 1 0-9.4l-7.9-6.1a24 24 0 0 0 0 21.6z"/><path fill="#34A853" d="M24 48c6.5 0 12-2.1 16-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg> Continue with Google</button><div class="or">or</div>
+    ${AUTH_SIGNUP ? `<div class="tabs"><button class="${signup ? '' : 'on'}" data-m="login">Login</button><button class="${signup ? 'on' : ''}" data-m="signup">Sign up</button></div>` : ''}
+    ${AUTH_GOOGLE ? `<button type="button" class="gbtn" id="aGoogle"><svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 0 1 0-9.4l-7.9-6.1a24 24 0 0 0 0 21.6z"/><path fill="#34A853" d="M24 48c6.5 0 12-2.1 16-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg> Continue with Google</button><div class="or">or</div>` : ''}
     <div class="field ${signup ? '' : 'hide'}"><label>Name</label><input id="aName" autocomplete="name" placeholder="Your name"></div>
     <div class="field"><label>Email</label><input id="aEmail" type="email" autocomplete="email" placeholder="you@example.com"></div>
     <div class="field"><label>Password</label><div class="pw"><input id="aPass" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" placeholder="At least 6 characters"><button type="button" class="pw-eye" aria-label="Show password"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="sl" d="M3 3l18 18"/></svg></button></div></div>
@@ -156,7 +158,7 @@ function authScreen(mode) {
     ${signup ? '' : '<div style="text-align:center"><button type="button" id="aForgot" style="background:none;border:0;color:var(--lav);font:inherit;font-size:13px;margin-top:12px;padding:6px;cursor:pointer">Forgot password?</button></div>'}
   </section>`;
   const fg = $('#aForgot'); if (fg) fg.onclick = forgotScreen;
-  $('#aGoogle').onclick = async () => { const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin } }); if (error) $('#aMsg').textContent = error.message; };
+  if ($('#aGoogle')) $('#aGoogle').onclick = async () => { const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin } }); if (error) $('#aMsg').textContent = error.message; };
   app.querySelectorAll('.tabs button').forEach(b => b.onclick = () => authScreen(b.dataset.m));
   const msg = $('#aMsg');
   $('#aGo').onclick = async () => {
