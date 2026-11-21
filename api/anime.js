@@ -13,8 +13,12 @@ module.exports = async (req, res) => {
       if (er.error) er = await epQ('id,title,number'); // thumb_url column abhi nahi bana (update5.sql baaki)
       return send(res, 200, { anime, episodes: er.data || [] });
     }
-    const { data } = await db.from('anime')
-      .select('id,title,genre,poster_url,episodes(count)').order('created_at', { ascending: false });
+    const listQ = cols => db.from('anime').select(cols).order('created_at', { ascending: false });
+    let dr = await listQ('id,title,genre,poster_url,episodes(id,title,number,thumb_url)');
+    if (dr.error) dr = await listQ('id,title,genre,poster_url,episodes(id,title,number)'); // update5.sql baaki ho tab bhi chale
+    const data = dr.data;
+    // "Episode 1", "Ep 2" jaise default naam search mein nahi aate; sirf asli (custom) episode naam search hote hain
+    const GENERIC = /^\s*(episode|ep|e)\s*\.?\s*#?\d+\s*$/i;
     // "New episodes": sirf pichhle NEW_EPISODE_DAYS (default 7) din ke episodes. Uske baad row se hat jaate hain, anime ke page par rehte hain.
     const days = Math.max(1, Number(process.env.NEW_EPISODE_DAYS || 7));
     const since = new Date(Date.now() - days * 86400000).toISOString();
@@ -26,7 +30,9 @@ module.exports = async (req, res) => {
     send(res, 200, {
       anime: (data || []).map(a => ({
         id: a.id, title: a.title, genre: a.genre, poster_url: a.poster_url,
-        episodeCount: (a.episodes && a.episodes[0] && a.episodes[0].count) || 0
+        episodeCount: (a.episodes || []).length,
+        eps: (a.episodes || []).filter(e => !GENERIC.test(e.title || '')).sort((x, y) => x.number - y.number)
+          .map(e => ({ id: e.id, title: e.title, number: e.number, thumb_url: e.thumb_url || '' }))
       })),
       latest: latest || []
     });
