@@ -1,3 +1,4 @@
+const { configured } = require('./_s3');
 const { db, UUID, getUser, isAdmin, displayName, send, fail, activeGrant, limited, claimDevice } = require('./_lib');
 module.exports = async (req, res) => {
   try {
@@ -30,6 +31,7 @@ module.exports = async (req, res) => {
       animePoster: ep.anime ? ep.anime.poster_url : '',
       views,
       playlist: `/api/playlist?e=${ep.id}`,
+      servers: [1, 2].filter(configured).length,
       expiresAt: grant.expires_at,
       watermark: displayName(user)
     });
