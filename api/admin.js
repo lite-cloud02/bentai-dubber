@@ -1,4 +1,5 @@
 const { db, UUID, getUser, isAdmin, send, fail, limited, crypto } = require('./_lib');
+const { conf, s3missing, configured } = require('./_s3');
 const { KEYS, clean, loadSettings } = require('./_settings');
 
 module.exports = async (req, res) => {
@@ -26,7 +27,9 @@ module.exports = async (req, res) => {
         const v = await db.from('vip_users').select('email,note,expires_at,created_at').order('created_at', { ascending: false });
         vips = v.data || [];
       } catch (e) { /* table abhi nahi bani */ }
-      return send(res, 200, { anime: data || [], settings: await loadSettings(db), reports, vips });
+      // Video servers ki sthiti (sirf admin ko): kaun si Vercel value mili / nahi mili (value kabhi nahi dikhti)
+      const storage = [1, 2].map(n => ({ n, ok: configured(n), missing: s3missing(n), bucket: conf(n).bucket }));
+      return send(res, 200, { anime: data || [], settings: await loadSettings(db), reports, vips, storage });
     }
     if (req.method !== 'POST') return fail(res, 405, 'Method not allowed');
 
