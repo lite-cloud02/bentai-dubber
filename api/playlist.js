@@ -22,7 +22,7 @@ module.exports = async (req, res) => {
     catch (err) { return fail(res, 503, 'Video is temporarily unavailable. Please try again in a few minutes.'); }
     if (!r.ok) {
       return fail(res, r.status === 404 ? 404 : 503, r.status === 404
-        ? 'Video file not found on this server. It may not be encoded yet (check the GitHub Actions run).'
+        ? 'This video is not available on this server yet.'
         : 'Video is temporarily unavailable. Please try again in a few minutes.');
     }
     const text = await r.text();
