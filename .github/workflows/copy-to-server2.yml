@@ -1,0 +1,55 @@
+name: Copy videos to server 2
+
+on:
+  workflow_dispatch:
+    inputs:
+      episode_id:
+        description: 'Episode ID to copy (leave EMPTY to copy ALL episodes)'
+        required: false
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.S3_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET }}
+      AWS_DEFAULT_REGION: ${{ secrets.S3_REGION }}
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+      S3B_KEY_ID: ${{ secrets.S3B_KEY_ID }}
+      S3B_SECRET: ${{ secrets.S3B_SECRET }}
+      S3B_REGION: ${{ secrets.S3B_REGION }}
+      S3B_BUCKET: ${{ secrets.S3B_BUCKET }}
+      S3B_ENDPOINT: ${{ secrets.S3B_ENDPOINT }}
+      EP: ${{ inputs.episode_id }}
+    steps:
+      - name: Check server 2 secrets
+        run: |
+          if [ -z "${S3B_BUCKET:-}" ] || [ -z "${S3B_KEY_ID:-}" ] || [ -z "${S3B_SECRET:-}" ] || [ -z "${S3B_ENDPOINT:-}" ]; then
+            echo "::error::Server 2 secrets are missing (S3B_KEY_ID, S3B_SECRET, S3B_BUCKET, S3B_ENDPOINT, S3B_REGION)"; exit 1
+          fi
+      - name: Work out server 2 region
+        run: |
+          R="${S3B_REGION:-}"
+          if [ -z "$R" ]; then
+            case "${S3B_ENDPOINT:-}" in
+              s3.*) R="$(echo "$S3B_ENDPOINT" | sed -E 's/^s3\.([^.]+)\..*/\1/')" ;;
+              *) R="auto" ;;
+            esac
+          fi
+          echo "S3B_REGION_EFF=$R" >> "$GITHUB_ENV"
+      - name: Download from server 1
+        run: |
+          PFX="episodes/"; if [ -n "${EP:-}" ]; then PFX="episodes/$EP/"; fi
+          mkdir -p data
+          aws s3 sync "s3://$S3_BUCKET/$PFX" "data/$PFX" --endpoint-url "https://$S3_ENDPOINT"
+          du -sh data || true
+      - name: Upload to server 2
+        run: |
+          PFX="episodes/"; if [ -n "${EP:-}" ]; then PFX="episodes/$EP/"; fi
+          AWS_ACCESS_KEY_ID="$S3B_KEY_ID" AWS_SECRET_ACCESS_KEY="$S3B_SECRET" AWS_DEFAULT_REGION="${S3B_REGION_EFF:-auto}" \
+            aws s3 sync "data/$PFX" "s3://$S3B_BUCKET/$PFX" --endpoint-url "https://$S3B_ENDPOINT"
+          echo "Copied: $PFX"
