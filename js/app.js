@@ -85,7 +85,7 @@ modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
 function loading(msg) { app.innerHTML = `<div class="center"><div class="spin"></div><p>${esc(msg || 'Loading...')}</p></div>`; }
 function stopPlayer() {
   if (!player) return;
-  clearInterval(player.timer); clearInterval(player.beat); clearInterval(player.wmTimer); clearTimeout(player.hideT);
+  clearInterval(player.timer); clearInterval(player.beat); clearInterval(player.wmTimer); clearTimeout(player.hideT); clearTimeout(player.noteT); clearTimeout(player.waitT);
   if (player.hls) player.hls.destroy();
   if (player.kd) document.removeEventListener('keydown', player.kd);
   if (player.fsc) document.removeEventListener('fullscreenchange', player.fsc);
@@ -349,9 +349,9 @@ function friendlyError(d) {
   const det = d.details || d.type || 'error';
   let msg;
   if (det === 'manifestLoadError') msg = apiMsg || (code === 403 ? 'Access has ended. Unlock the episode again.' : 'Video playlist not found.');
-  else if (det === 'keyLoadError') msg = 'Could not get the video key. (Check KEY_SECRET and SITE_URL)';
-  else if (det === 'fragDecryptError' || det === 'fragParsingError') msg = 'Could not decrypt the video. GitHub and Vercel may have different KEY_SECRET values (they must match).';
-  else if (det === 'fragLoadError' || det === 'fragLoadTimeOut') msg = 'Video segments failed to load. Check your internet or the Backblaze CORS rule.';
+  else if (det === 'keyLoadError') msg = 'Could not load the video. Please refresh the page and try again.';
+  else if (det === 'fragDecryptError' || det === 'fragParsingError') msg = 'Could not play this video right now. Please try again in a while.';
+  else if (det === 'fragLoadError' || det === 'fragLoadTimeOut') msg = 'The video could not load. Check your internet and try again.';
   else msg = 'Playback problem.';
   // jaanch ke liye: status aur tukde ka address (signature ke bina)
   let where = '', st = '';
@@ -373,6 +373,7 @@ async function watch(id) {
   }
 
   app.innerHTML = `<section class="watch"><div class="wgrid"><div class="wmain">
+    ${info.servers > 1 ? `<div class="srvbar" id="srvbar"><span>Server</span><button class="srvb on" data-s="1">Server 1</button><button class="srvb" data-s="2">Server 2</button><div class="srvnote" id="srvnote" hidden>Video not loading? Try switching the server.</div></div>` : ''}
     <div class="wtop"><a class="backc" href="#/anime/${esc(info.animeId)}" aria-label="Back"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M13.5 8l-4 4 4 4"/></svg></a><div class="np off" id="np"><i class="eq"><b></b><b></b><b></b></i><span class="npt"><small>NOW PLAYING</small><b>Episode ${esc(info.number)}</b></span></div></div>
     <div class="player" id="pl">
       <video id="vid" playsinline webkit-playsinline preload="auto" disablePictureInPicture controlsList="nodownload noremoteplayback"></video>
@@ -439,10 +440,16 @@ async function watch(id) {
   /* --- helpers --- */
   const showErr = e => {
     if (P.done) return;
-    $('#errmsg').textContent = e.msg; $('#errdet').textContent = 'Code: ' + e.det; $('#errdet').style.wordBreak = 'break-all';
+    $('#errmsg').textContent = e.msg + (info.servers > 1 && !/device-/.test(e.det) ? ' You can also try switching the server above.' : ''); $('#errdet').textContent = 'Code: ' + e.det; $('#errdet').style.wordBreak = 'break-all';
     $('#err').hidden = false; buf.classList.add('hide'); ctrls.classList.add('hide');
   };
   $('#retry').onclick = () => watch(id);
+  /* --- server notice + active server --- */
+  const setActive = n => app.querySelectorAll('.srvb').forEach(b => b.classList.toggle('on', Number(b.dataset.s) === n));
+  const showNote = () => { const n = $('#srvnote'); if (n) n.hidden = false; };
+  const hideNote = () => { const n = $('#srvnote'); if (n) n.hidden = true; clearTimeout(P.noteT); clearTimeout(P.waitT); };
+  video.addEventListener('playing', hideNote);
+  video.addEventListener('waiting', () => { clearTimeout(P.waitT); P.waitT = setTimeout(() => { if (video.readyState < 3) showNote(); }, 8000); });
   $('#errrep').onclick = () => openReport(id);
   $('#nextgo').onclick = () => { if (P.next) askUnlock(P.next.id); };
   $('#replay').onclick = () => { $('#nextbox').hidden = true; video.currentTime = 0; video.play().catch(() => {}); };
@@ -570,18 +577,41 @@ async function watch(id) {
   const tok = await accessToken();
   if (player !== P) return;  // user beech mein hat gaya
   if (window.Hls && Hls.isSupported()) {
-    const hls = new Hls({
-      maxBufferLength: 40,
-      xhrSetup: (xhr, url) => { if (url.indexOf('/api/') !== -1) xhr.setRequestHeader('Authorization', 'Bearer ' + tok); }
-    });
-    hls.loadSource(info.playlist); hls.attachMedia(video);
-    hls.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); });
-    hls.on(Hls.Events.ERROR, (_, d) => {
-      if (!d.fatal) return;
-      if (d.type === Hls.ErrorTypes.MEDIA_ERROR && !P.recovered) { P.recovered = true; hls.recoverMediaError(); return; }
-      try { showErr(friendlyError(d)); } catch (x) { showErr({ msg: 'Playback problem.', det: String(d.details || d.type || 'error') }); }
-    });
-    P.hls = hls;
+    // Server apne aap nahi badalta: sirf Server 1 / Server 2 button dabane par badalta hai
+    const startHls = (srv, startAt) => {
+      const hls = new Hls({
+        maxBufferLength: 40,
+        startPosition: startAt > 1 ? startAt : -1,
+        xhrSetup: (xhr, url) => {
+          if (url.indexOf('/api/') !== -1) xhr.setRequestHeader('Authorization', 'Bearer ' + tok);
+          if (url.indexOf('/api/playlist') !== -1) xhr.addEventListener('load', () => { const s = Number(xhr.getResponseHeader('X-Storage')); if (s === 1 || s === 2) setActive(s); });
+        }
+      });
+      clearTimeout(P.noteT); P.noteT = setTimeout(() => { if (video.readyState < 3) showNote(); }, 12000); // 12 second mein shuru na ho to notice
+      hls.loadSource(info.playlist + (srv === 2 ? (info.playlist.indexOf('?') === -1 ? '?' : '&') + 'srv=2' : ''));
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); });
+      hls.on(Hls.Events.ERROR, (_, d) => {
+        if (!d.fatal) return;
+        if (d.type === Hls.ErrorTypes.MEDIA_ERROR && !P.recovered) { P.recovered = true; hls.recoverMediaError(); return; }
+        showNote();
+        try { showErr(friendlyError(d)); } catch (x) { showErr({ msg: 'Playback problem.', det: String(d.details || d.type || 'error') }); }
+      });
+      return hls;
+    };
+    // Server button: dabane par usi jagah se dusre server se chalega
+    P.switchTo = n => {
+      hideNote(); $('#err').hidden = true; ctrls.classList.remove('hide'); buf.classList.remove('hide');
+      const t = video.currentTime || 0;
+      if (P.hls) P.hls.destroy();
+      P.recovered = false;
+      try { localStorage.setItem('bd_srv', String(n)); } catch (x) { /* ignore */ }
+      P.hls = startHls(n, t); setActive(n);
+    };
+    app.querySelectorAll('.srvb').forEach(b => b.onclick = () => P.switchTo(Number(b.dataset.s)));
+    let srv0 = 1; // pichhli baar jo server chuna tha wahi se shuru (agar do server hon)
+    try { if (info.servers > 1 && localStorage.getItem('bd_srv') === '2') srv0 = 2; } catch (x) { /* ignore */ }
+    P.hls = startHls(srv0, 0); setActive(srv0);
   } else {
     showErr({ msg: 'This browser is not supported. Use Chrome or an updated Safari (iOS 17.1+).', det: 'no-mse' });
   }
