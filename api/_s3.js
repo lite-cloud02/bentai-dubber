@@ -60,4 +60,4 @@ function rewritePlaylist(text, prefix, expires, n) {
   }).join('\n');
 }
 
-module.exports = { presign, s3missing, configured, signedUrl, rewritePlaylist };
+module.exports = { presign, conf, s3missing, configured, signedUrl, rewritePlaylist };
