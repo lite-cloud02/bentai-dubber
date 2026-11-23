@@ -47,6 +47,11 @@ function render() {
   <div class="panel"><h2>Reports (${(data.reports || []).length})</h2>
     ${(data.reports || []).length ? data.reports.map(r => `<div class="row"><span>${v(r.episodes && r.episodes.anime ? r.episodes.anime.title : '')} &middot; ${v(r.episodes && r.episodes.title)}<br><small>${v(r.message)} &middot; ${new Date(r.created_at).toLocaleString('en-IN')}</small></span><button class="del ok" data-r="${r.id}">Resolved</button></div>`).join('') : '<p class="muted">No reports yet.</p>'}</div>
 
+  <div class="panel"><h2>Video servers</h2>
+    ${(data.storage || []).map(s => `<p style="margin:8px 0">${s.ok ? '&#9989;' : '&#10060;'} <b>Server ${s.n}</b>: ${s.ok ? 'ready &middot; bucket ' + v(s.bucket) : 'not ready. Missing in Vercel: ' + v(s.missing.join(', '))}</p>`).join('') || '<p class="muted">No info.</p>'}
+    <p class="muted" style="font-size:13px">The Server 1 / Server 2 buttons show on the video page only when both servers are ready. After changing Vercel variables, Redeploy.</p>
+  </div>
+
   <form class="panel" id="fV"><h2>VIP accounts (${(data.vips || []).length})</h2>
     <p class="muted" style="font-size:13px;margin-top:-6px">VIP users skip the shortener link. Enter the email they used to sign up. After the VIP days end, the user is removed from this list automatically. Adding the same email again renews the days.</p>
     <div class="field"><label>User email</label><input name="email" type="email" required placeholder="user@gmail.com"></div>
