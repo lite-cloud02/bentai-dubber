@@ -440,7 +440,7 @@ async function watch(id) {
   /* --- helpers --- */
   const showErr = e => {
     if (P.done) return;
-    $('#errmsg').textContent = e.msg + (info.servers > 1 && !/device-/.test(e.det) ? ' You can also try switching the server above.' : ''); $('#errdet').textContent = 'Code: ' + e.det; $('#errdet').style.wordBreak = 'break-all';
+    $('#errmsg').textContent = e.msg + (info.servers > 1 && !/device-/.test(e.det) ? ' Try switching the server above.' : ''); $('#errdet').textContent = 'Code: ' + e.det; $('#errdet').style.wordBreak = 'break-all';
     $('#err').hidden = false; buf.classList.add('hide'); ctrls.classList.add('hide');
   };
   $('#retry').onclick = () => watch(id);
