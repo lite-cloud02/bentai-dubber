@@ -26,38 +26,38 @@ function presign({ host, path, region, accessKey, secret, expires, now }) {
   return `https://${host}${path}?${qs}&X-Amz-Signature=${sig}`;
 }
 
-function conf() {
-  const host = strip(process.env.S3_ENDPOINT).replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+// Server 1 = S3_* variables (abhi Backblaze). Server 2 = S3B_* variables (jaise Cloudflare R2). Dono same tarah ke S3 hain.
+function conf(n) {
+  const p = n === 2 ? 'S3B_' : 'S3_';
+  const e = k => strip(process.env[p + k]);
+  const host = e('ENDPOINT').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   const m = host.match(/^s3\.([^.]+)\./);
-  return {
-    host, bucket: strip(process.env.S3_BUCKET),
-    region: strip(process.env.S3_REGION) || (m ? m[1] : ''),
-    accessKey: strip(process.env.S3_KEY_ID), secret: strip(process.env.S3_SECRET)
-  };
+  return { host, bucket: e('BUCKET'), region: e('REGION') || (m ? m[1] : ''), accessKey: e('KEY_ID'), secret: e('SECRET') };
 }
 
-function s3missing() {
-  const c = conf(), out = [];
-  if (!c.host) out.push('S3_ENDPOINT');
-  if (!c.bucket) out.push('S3_BUCKET');
-  if (!c.region) out.push('S3_REGION');
-  if (!c.accessKey) out.push('S3_KEY_ID');
-  if (!c.secret) out.push('S3_SECRET');
+function s3missing(n) {
+  const c = conf(n), p = n === 2 ? 'S3B_' : 'S3_', out = [];
+  if (!c.host) out.push(p + 'ENDPOINT');
+  if (!c.bucket) out.push(p + 'BUCKET');
+  if (!c.region) out.push(p + 'REGION');
+  if (!c.accessKey) out.push(p + 'KEY_ID');
+  if (!c.secret) out.push(p + 'SECRET');
   return out;
 }
+const configured = n => s3missing(n).length === 0;
 
-function signedUrl(key, expires) {
-  const c = conf();
+function signedUrl(key, expires, n) {
+  const c = conf(n);
   return presign({ host: c.host, path: `/${enc(c.bucket)}/${encPath(key)}`, region: c.region, accessKey: c.accessKey, secret: c.secret, expires });
 }
 
 // m3u8 ki har segment line ko signed link se badal deta hai
-function rewritePlaylist(text, prefix, expires) {
+function rewritePlaylist(text, prefix, expires, n) {
   return text.split(/\r?\n/).map(line => {
     const t = line.trim();
     if (!t || t.startsWith('#')) return line;
-    return signedUrl(prefix + t, expires);
+    return signedUrl(prefix + t, expires, n);
   }).join('\n');
 }
 
-module.exports = { presign, s3missing, signedUrl, rewritePlaylist };
+module.exports = { presign, s3missing, configured, signedUrl, rewritePlaylist };
