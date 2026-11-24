@@ -1,5 +1,9 @@
 name: Copy videos to server 2
 
+# Purani videos Server 1 se Server 2 par copy karta hai, ek-ek episode karke.
+# Jo episode Server 2 par pehle se hai use chhod deta hai. Server 1 ka download limit khatam ho jaye
+# to wahin ruk jata hai; baad mein (limit reset ke baad) dobara chalao, wo wahin se aage badhega.
+
 on:
   workflow_dispatch:
     inputs:
@@ -10,7 +14,7 @@ on:
 jobs:
   copy:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 300
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.S3_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET }}
@@ -41,15 +45,41 @@ jobs:
             esac
           fi
           echo "S3B_REGION_EFF=$R" >> "$GITHUB_ENV"
-      - name: Download from server 1
+      - name: Copy episodes one by one
         run: |
-          PFX="episodes/"; if [ -n "${EP:-}" ]; then PFX="episodes/$EP/"; fi
-          mkdir -p data
-          aws s3 sync "s3://$S3_BUCKET/$PFX" "data/$PFX" --endpoint-url "https://$S3_ENDPOINT"
-          du -sh data || true
-      - name: Upload to server 2
-        run: |
-          PFX="episodes/"; if [ -n "${EP:-}" ]; then PFX="episodes/$EP/"; fi
-          AWS_ACCESS_KEY_ID="$S3B_KEY_ID" AWS_SECRET_ACCESS_KEY="$S3B_SECRET" AWS_DEFAULT_REGION="${S3B_REGION_EFF:-auto}" \
-            aws s3 sync "data/$PFX" "s3://$S3B_BUCKET/$PFX" --endpoint-url "https://$S3B_ENDPOINT"
-          echo "Copied: $PFX"
+          set -u
+          S1() { aws "$@" --endpoint-url "https://$S3_ENDPOINT"; }
+          S2() { AWS_ACCESS_KEY_ID="$S3B_KEY_ID" AWS_SECRET_ACCESS_KEY="$S3B_SECRET" AWS_DEFAULT_REGION="${S3B_REGION_EFF:-auto}" aws "$@" --endpoint-url "https://$S3B_ENDPOINT"; }
+
+          if ! S2 s3api list-objects-v2 --bucket "$S3B_BUCKET" --max-items 1 >/dev/null 2>&1; then
+            echo "::error::Cannot open the server 2 bucket. Check the S3B_* secrets (key, bucket name, endpoint)."; exit 1
+          fi
+
+          if [ -n "${EP:-}" ]; then
+            IDS="$EP"
+          else
+            IDS="$(S1 s3 ls "s3://$S3_BUCKET/episodes/" | awk '$1=="PRE"{gsub("/","",$2); print $2}')"
+          fi
+          if [ -z "$IDS" ]; then echo "::error::No episodes found on server 1 (or cannot read it)."; exit 1; fi
+
+          DONE=0; SKIP=0; FAIL=0
+          for ID in $IDS; do
+            if S2 s3 ls "s3://$S3B_BUCKET/episodes/$ID/index.m3u8" >/dev/null 2>&1; then
+              echo "SKIP   $ID (already on server 2)"; SKIP=$((SKIP+1)); continue
+            fi
+            rm -rf work; mkdir -p "work/$ID"
+            if ! S1 s3 sync "s3://$S3_BUCKET/episodes/$ID/" "work/$ID/" --only-show-errors; then
+              echo "::warning::Could not download $ID. Server 1 download limit may be reached. Stopping here; run this workflow again later."
+              FAIL=1; break
+            fi
+            if [ ! -f "work/$ID/index.m3u8" ]; then echo "::warning::$ID has no index.m3u8 on server 1, skipped"; continue; fi
+            # pehle video ke tukde, phir aakhir mein playlist (taaki adhura upload kabhi 'poora' na dikhe)
+            if S2 s3 sync "work/$ID/" "s3://$S3B_BUCKET/episodes/$ID/" --exclude "index.m3u8" --only-show-errors \
+               && S2 s3 cp "work/$ID/index.m3u8" "s3://$S3B_BUCKET/episodes/$ID/index.m3u8" --only-show-errors; then
+              echo "COPIED $ID"; DONE=$((DONE+1))
+            else
+              echo "::warning::Upload to server 2 failed for $ID"; FAIL=1
+            fi
+          done
+          echo "================ Copied=$DONE  Skipped(already there)=$SKIP  Problems=$FAIL"
+          if [ "$FAIL" != 0 ]; then exit 1; fi
