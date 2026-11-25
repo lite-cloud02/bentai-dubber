@@ -11,6 +11,7 @@ module.exports = (req, res) => {
   res.status(200).send('window.BD_CONFIG = ' + JSON.stringify({
     SUPABASE_URL: url,
     SUPABASE_ANON_KEY: risky ? '' : key,
-    ERROR: risky ? 'secret_key' : ''
+    ERROR: risky ? 'secret_key' : '',
+    TURNSTILE_SITEKEY: strip(process.env.TURNSTILE_SITEKEY) // public key; khali ho to bot check band
   }) + ';');
 };
