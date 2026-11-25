@@ -336,29 +336,62 @@ async function animePage(id) {
 
 /* ---------- shortener unlock ---------- */
 /* ---------- Adblock check (sirf episode unlock par, jab shortener khulna ho) ---------- */
+// Teen tarah ki jaanch: (1) bait elements, (2) ad jaise naam wali apni files (browser ka blocker inhe rokta hai),
+// (3) ad network / shortener ka host (DNS wale blockers). Kuch bhi roka gaya to blocker maana jaata hai.
 const probe = url => fetch(url, { mode: 'no-cors', cache: 'no-store' }).then(() => true, () => false); // true = pahunch gaya
-async function adblockOn(shortUrl) {
-  if (navigator.onLine === false) return false;
-  // 1) bait: blockers aise naam wale element chhupa dete hain
-  const bait = document.createElement('div');
-  bait.className = 'adsbox ad-banner adsbygoogle pub_300x250 text-ad textAd';
-  bait.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:10px;height:10px';
-  document.body.appendChild(bait);
-  await new Promise(r => setTimeout(r, 120));
-  const cs = getComputedStyle(bait);
-  const hidden = bait.offsetHeight === 0 || cs.display === 'none' || cs.visibility === 'hidden';
-  bait.remove();
-  if (hidden) return true;
-  // 2) ad script aur shortener ka host rok diya gaya?
-  const urls = ['https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js'];
-  if (shortUrl) { try { urls.push(new URL(shortUrl).origin + '/favicon.ico'); } catch (e) { /* ignore */ } }
-  return (await Promise.all(urls.map(probe))).some(ok => !ok);
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const scriptOk = (src, flag) => new Promise(res => {
+  const s = document.createElement('script'); s.async = true;
+  let done = false; const fin = ok => { if (done) return; done = true; try { s.remove(); } catch (e) { /* ignore */ } res(ok); };
+  s.onload = () => fin(window[flag] === 1); // load hui par script chali nahi (blocker ne khali bhej diya) = roka gaya
+  s.onerror = () => fin(false);
+  setTimeout(() => fin(true), 5000); // der lage to blocker nahi maante (galat alarm se bachne ke liye)
+  s.src = src + '?r=' + Date.now(); document.head.appendChild(s);
+});
+const imgOk = src => new Promise(res => {
+  const i = new Image(); let done = false; const fin = ok => { if (done) return; done = true; res(ok); };
+  i.onload = () => fin(i.naturalWidth > 0); i.onerror = () => fin(false); setTimeout(() => fin(true), 5000);
+  i.src = src + '?r=' + Date.now();
+});
+async function adblockWhy(shortUrl) {
+  const why = [];
+  if (navigator.onLine === false) return why;
+  // 1) bait elements: cosmetic filters inhe chhupa dete hain
+  const mkBait = (tag, cls, id) => {
+    const e = document.createElement(tag); e.className = cls; if (id) e.id = id;
+    e.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:10px;height:10px'; e.innerHTML = '&nbsp;';
+    document.body.appendChild(e); return e;
+  };
+  const baits = [
+    mkBait('div', 'adsbox ad-banner adsbygoogle pub_300x250 pub_300x250m pub_728x90 text-ad textAd text_ad text_ads text-ads text-ad-links ad-placement'),
+    mkBait('ins', 'adsbygoogle', 'google_ads_iframe_bait'),
+    mkBait('div', 'ad-container', 'ad-banner')
+  ];
+  await wait(150);
+  const hid = baits.some(e => { const cs = getComputedStyle(e); return e.offsetHeight === 0 || cs.display === 'none' || cs.visibility === 'hidden'; });
+  baits.forEach(e => { try { e.remove(); } catch (x) { /* ignore */ } });
+  if (hid) why.push('bait-element');
+  // 2) ad jaise naam wali apni files: pehle control (normal file load ho rahi hai na), phir bait files
+  if (await imgOk('/img/favicon.png')) {
+    const r = await Promise.all([scriptOk('/ads/ads.js', '__bdAds1'), scriptOk('/ads/adframe.js', '__bdAds2'), imgOk('/ads/banner/300x250.svg')]);
+    if (!r[0]) why.push('script:/ads/ads.js');
+    if (!r[1]) why.push('script:/ads/adframe.js');
+    if (!r[2]) why.push('image:/ads/banner/300x250.svg');
+  }
+  // 3) ad network aur shortener ka host (DNS wale blockers)
+  const urls = [['adnet', 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js']];
+  if (shortUrl) { try { urls.push(['shortener', new URL(shortUrl).origin + '/favicon.ico']); } catch (e) { /* ignore */ } }
+  const net = await Promise.all(urls.map(u => probe(u[1])));
+  net.forEach((ok, i) => { if (!ok) why.push('host:' + urls[i][0]); });
+  return why;
 }
-function showAdblockNotice(url) {
+const adblockOn = async shortUrl => (await adblockWhy(shortUrl)).length > 0;
+function showAdblockNotice(url, why) {
+  const dbg = /[?&]adbg\b/.test(location.search) && why && why.length ? `<p class="muted" style="font-size:12px">Detected by: ${esc(why.join(', '))}</p>` : '';
   showModal(`<h3>Please turn off your adblocker</h3>
     <p>An adblocker seems to be blocking the unlock link. Turn it off (or pause it) for this site, then press <b>Check again</b>.</p>
     <button class="btn" id="abGo">Check again</button><button class="btn ghost" id="abNo">Cancel</button>
-    <p class="muted" style="font-size:13px;margin-top:12px">Still blocked after turning it off? Refresh the page once. No adblocker? Check your internet, VPN or private DNS.</p>`);
+    <p class="muted" style="font-size:13px;margin-top:12px">Still blocked after turning it off? Refresh the page once. No adblocker? Check your internet, VPN or private DNS.</p>${dbg}`);
   $('#abNo').onclick = closeModal;
   $('#abGo').onclick = async () => {
     $('#abGo').disabled = true; $('#abGo').textContent = 'Checking...';
@@ -377,8 +410,7 @@ function askUnlock(episodeId) {
     try {
       const r = await post('start', { episodeId });
       if (r.direct) { closeModal(); location.hash = '#/watch/' + episodeId; }
-      else if (await adblockOn(r.url)) showAdblockNotice(r.url); // shortener se pehle adblock check
-      else location.href = r.url;
+      else { const why = await adblockWhy(r.url); if (why.length) showAdblockNotice(r.url, why); else location.href = r.url; } // shortener se pehle adblock check
     } catch (e) {
       showModal(`<h3>Link failed</h3><p>${esc(e.message)}</p><button class="btn" id="mOk">OK</button>`);
       $('#mOk').onclick = closeModal;
