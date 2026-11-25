@@ -446,3 +446,4 @@ body[data-bg="auth"]::before{background:linear-gradient(rgba(7,6,13,0),rgba(7,6,
 .srvb{padding:6px 14px;border-radius:16px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .srvb.on{background:linear-gradient(135deg,#ff2d78,#a43bff);border-color:transparent;color:#fff}
 .srvnote{flex-basis:100%;margin-top:2px;padding:8px 12px;border-radius:10px;background:rgba(255,45,120,.14);border:1px solid rgba(255,45,120,.4);font-size:13px;color:#ffd5e4}
+.cap{display:flex;justify-content:center;margin:8px 0 2px;min-height:0}
