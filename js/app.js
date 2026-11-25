@@ -101,18 +101,24 @@ function forgotScreen() {
     <h1 class="auth-brand">Password<span> reset</span></h1>
     <p class="auth-sub">Enter your registered email. We will send you a link to reset your password.</p>
     <div class="field"><label>Email</label><input id="fEmail" type="email" autocomplete="email" placeholder="you@example.com"></div>
+    <div class="cap" id="fCap"></div>
     <p class="msg" id="fMsg"></p>
     <button class="btn" id="fGo">Send reset link</button>
     <button class="btn ghost" id="fBack">Back to login</button>
   </section>`;
   $('#fBack').onclick = () => authScreen('login');
+  let cap = { on: false, failed: false, token: '', reset() {} };
+  mountCaptcha('#fCap').then(c => { cap = c; });
   $('#fGo').onclick = async () => {
     const email = $('#fEmail').value.trim(), msg = $('#fMsg');
     if (!email) { msg.textContent = 'Enter your email.'; return; }
-    $('#fGo').disabled = true; msg.style.color = ''; msg.textContent = 'One moment...';
-    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin });
+    msg.style.color = '';
+    if (!capReady(cap, msg)) return;
+    $('#fGo').disabled = true; msg.textContent = 'One moment...';
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin, captchaToken: cap.token || undefined });
+    cap.reset();
     $('#fGo').disabled = false;
-    if (error) { msg.textContent = error.message; return; }
+    if (error) { msg.textContent = capMsg(error.message); return; }
     msg.style.color = '#6ee7a1';
     msg.textContent = 'If this email is registered, a reset link has been sent. Check your inbox and spam folder.';
   };
@@ -140,6 +146,41 @@ function recoveryScreen() {
 }
 
 /* ---------- auth ---------- */
+/* ---------- Bot check (Cloudflare Turnstile): sirf tab jab TURNSTILE_SITEKEY Vercel mein ho ---------- */
+let tsLoading = null;
+function loadTurnstile() {
+  if (!(window.BD_CONFIG && BD_CONFIG.TURNSTILE_SITEKEY)) return Promise.resolve(false);
+  if (window.turnstile) return Promise.resolve(true);
+  if (!tsLoading) tsLoading = new Promise(res => {
+    const s = document.createElement('script');
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'; s.async = true;
+    s.onload = () => res(true); s.onerror = () => res(false);
+    document.head.appendChild(s);
+  });
+  return tsLoading;
+}
+async function mountCaptcha(sel) {
+  const cap = { on: false, failed: false, token: '', id: null, reset() {} };
+  const el = $(sel);
+  if (!el || !(window.BD_CONFIG && BD_CONFIG.TURNSTILE_SITEKEY)) return cap;
+  if (!(await loadTurnstile())) { cap.failed = true; return cap; }
+  cap.on = true;
+  cap.id = turnstile.render(el, {
+    sitekey: BD_CONFIG.TURNSTILE_SITEKEY, theme: 'dark',
+    callback: t => { cap.token = t; },
+    'expired-callback': () => { cap.token = ''; },
+    'error-callback': () => { cap.token = ''; }
+  });
+  cap.reset = () => { cap.token = ''; try { turnstile.reset(cap.id); } catch (e) { /* ignore */ } };
+  return cap;
+}
+const capReady = (cap, msg) => {
+  if (cap.failed) { msg.textContent = 'The security check could not load. Turn off blockers or VPN for this site and refresh the page.'; return false; }
+  if (cap.on && !cap.token) { msg.textContent = 'Please wait for the security check to finish.'; return false; }
+  return true;
+};
+const capMsg = m => (/captcha/i.test(m || '') ? 'Security check failed. Please try again.' : m);
+
 const AUTH_GOOGLE = false; // Google login button: true = dikhao, false = chhupao
 const AUTH_SIGNUP = true;  // Sign up tab: true = dikhao, false = chhupao
 function authScreen(mode) {
@@ -153,6 +194,7 @@ function authScreen(mode) {
     <div class="field ${signup ? '' : 'hide'}"><label>Name</label><input id="aName" autocomplete="name" placeholder="Your name"></div>
     <div class="field"><label>Email</label><input id="aEmail" type="email" autocomplete="email" placeholder="you@example.com"></div>
     <div class="field"><label>Password</label><div class="pw"><input id="aPass" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" placeholder="At least 6 characters"><button type="button" class="pw-eye" aria-label="Show password"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="sl" d="M3 3l18 18"/></svg></button></div></div>
+    <div class="cap" id="aCap"></div>
     <p class="msg" id="aMsg"></p>
     <button class="btn" id="aGo">${signup ? 'Create account' : 'Log in'}</button>
     ${signup ? '' : '<div style="text-align:center"><button type="button" id="aForgot" style="background:none;border:0;color:var(--lav);font:inherit;font-size:13px;margin-top:12px;padding:6px;cursor:pointer">Forgot password?</button></div>'}
@@ -161,18 +203,23 @@ function authScreen(mode) {
   if ($('#aGoogle')) $('#aGoogle').onclick = async () => { const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin } }); if (error) $('#aMsg').textContent = error.message; };
   app.querySelectorAll('.tabs button').forEach(b => b.onclick = () => authScreen(b.dataset.m));
   const msg = $('#aMsg');
+  let cap = { on: false, failed: false, token: '', reset() {} };
+  mountCaptcha('#aCap').then(c => { cap = c; });
   $('#aGo').onclick = async () => {
     const email = $('#aEmail').value.trim(), password = $('#aPass').value;
     if (!email || password.length < 6) { msg.textContent = 'Enter your email and a password of 6+ characters.'; return; }
+    if (!capReady(cap, msg)) return;
     msg.textContent = 'One moment...';
     if (signup) {
       const name = $('#aName').value.trim();
-      const { data, error } = await sb.auth.signUp({ email, password, options: { data: { name } } });
-      if (error) { msg.textContent = error.message; return; }
+      const { data, error } = await sb.auth.signUp({ email, password, options: { data: { name }, captchaToken: cap.token || undefined } });
+      cap.reset();
+      if (error) { msg.textContent = capMsg(error.message); return; }
       if (!data.session) { msg.textContent = 'We sent a confirmation link to your email. Confirm it, then log in.'; return; }
     } else {
-      const { error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) { msg.textContent = 'Incorrect email or password.'; return; }
+      const { error } = await sb.auth.signInWithPassword({ email, password, options: { captchaToken: cap.token || undefined } });
+      cap.reset();
+      if (error) { msg.textContent = /captcha/i.test(error.message) ? capMsg(error.message) : 'Incorrect email or password.'; return; }
     }
   };
 }
@@ -288,6 +335,38 @@ async function animePage(id) {
 }
 
 /* ---------- shortener unlock ---------- */
+/* ---------- Adblock check (sirf episode unlock par, jab shortener khulna ho) ---------- */
+const probe = url => fetch(url, { mode: 'no-cors', cache: 'no-store' }).then(() => true, () => false); // true = pahunch gaya
+async function adblockOn(shortUrl) {
+  if (navigator.onLine === false) return false;
+  // 1) bait: blockers aise naam wale element chhupa dete hain
+  const bait = document.createElement('div');
+  bait.className = 'adsbox ad-banner adsbygoogle pub_300x250 text-ad textAd';
+  bait.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:10px;height:10px';
+  document.body.appendChild(bait);
+  await new Promise(r => setTimeout(r, 120));
+  const cs = getComputedStyle(bait);
+  const hidden = bait.offsetHeight === 0 || cs.display === 'none' || cs.visibility === 'hidden';
+  bait.remove();
+  if (hidden) return true;
+  // 2) ad script aur shortener ka host rok diya gaya?
+  const urls = ['https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js'];
+  if (shortUrl) { try { urls.push(new URL(shortUrl).origin + '/favicon.ico'); } catch (e) { /* ignore */ } }
+  return (await Promise.all(urls.map(probe))).some(ok => !ok);
+}
+function showAdblockNotice(url) {
+  showModal(`<h3>Please turn off your adblocker</h3>
+    <p>An adblocker seems to be blocking the unlock link. Turn it off (or pause it) for this site, then press <b>Check again</b>.</p>
+    <button class="btn" id="abGo">Check again</button><button class="btn ghost" id="abNo">Cancel</button>
+    <p class="muted" style="font-size:13px;margin-top:12px">Still blocked after turning it off? Refresh the page once. No adblocker? Check your internet, VPN or private DNS.</p>`);
+  $('#abNo').onclick = closeModal;
+  $('#abGo').onclick = async () => {
+    $('#abGo').disabled = true; $('#abGo').textContent = 'Checking...';
+    if (await adblockOn(url)) { $('#abGo').disabled = false; $('#abGo').textContent = 'Still blocked. Check again'; return; }
+    location.href = url;
+  };
+}
+
 function askUnlock(episodeId) {
   showModal(`<h3>Unlock this episode</h3>
     <p>Complete one short link to unlock this episode. Then you can watch it for <b>1 hour</b>.</p>
@@ -298,6 +377,7 @@ function askUnlock(episodeId) {
     try {
       const r = await post('start', { episodeId });
       if (r.direct) { closeModal(); location.hash = '#/watch/' + episodeId; }
+      else if (await adblockOn(r.url)) showAdblockNotice(r.url); // shortener se pehle adblock check
       else location.href = r.url;
     } catch (e) {
       showModal(`<h3>Link failed</h3><p>${esc(e.message)}</p><button class="btn" id="mOk">OK</button>`);
