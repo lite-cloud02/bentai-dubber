@@ -96,7 +96,7 @@ function stopPlayer() {
 
 /* ---------- password reset ---------- */
 function forgotScreen() {
-  stopPlayer(); chrome(false);
+  navStart(); stopPlayer(); chrome(false);
   app.innerHTML = `<section class="auth">
     <h1 class="auth-brand">Password<span> reset</span></h1>
     <p class="auth-sub">Enter your registered email. We will send you a link to reset your password.</p>
@@ -124,7 +124,7 @@ function forgotScreen() {
   };
 }
 function recoveryScreen() {
-  stopPlayer(); chrome(false);
+  navStart(); stopPlayer(); chrome(false);
   app.innerHTML = `<section class="auth">
     <h1 class="auth-brand">New<span> password</span></h1>
     <p class="auth-sub">Enter your new password.</p>
@@ -184,7 +184,7 @@ const capMsg = m => (/captcha/i.test(m || '') ? 'Security check failed. Please t
 const AUTH_GOOGLE = false; // Google login button: true = dikhao, false = chhupao
 const AUTH_SIGNUP = true;  // Sign up tab: true = dikhao, false = chhupao
 function authScreen(mode) {
-  stopPlayer(); chrome(false);
+  navStart(); stopPlayer(); chrome(false);
   const signup = AUTH_SIGNUP && mode === 'signup';
   app.innerHTML = `<section class="auth">
     <img class="auth-logo" src="img/logo.png" alt="Bentai Dubber">
@@ -235,11 +235,28 @@ const secHead = (title, href) => `<div class="sec"><i></i><h2>${title}</h2>${hre
 
 const searchEpCard = (an, e) => `<button class="c16 ep-c" data-id="${e.id}" aria-label="${esc(e.title)}"><div class="t16">${thumb({ poster_url: e.thumb_url || an.poster_url, title: e.title })}<b class="tpill">Ep ${e.number}</b></div><span class="ct">${esc(e.title)}</span><span class="cg">${esc(an.title)}</span></button>`;
 
+/* ---------- screen race fix ----------
+   Har nayi screen NAV badhati hai. Der se aane wali purani screen ko pata chal jaata hai aur wo nayi screen ko overwrite nahi karti.
+   Anime list 60 second ke liye cache hoti hai, to Home/Search tab turant khulte hain. */
+let NAV = 0;
+const navStart = () => ++NAV;
+let ANIME_C = null;
+function loadAnime() {
+  const now = Date.now();
+  if (ANIME_C && now - ANIME_C.t < 60000) return ANIME_C.p;
+  const p = api('anime');
+  ANIME_C = { t: now, p };
+  p.catch(() => { if (ANIME_C && ANIME_C.p === p) ANIME_C = null; });
+  return p;
+}
+
 async function home(searchMode) {
   // Home: banner + New episodes (slide) + All anime. Tags/chips sirf Search page par (aur 3-line menu mein).
+  const seq = navStart();
   stopPlayer(); chrome(true, searchMode ? 'search' : 'home'); loading('Loading anime...');
   try {
-    const { anime, latest } = await api('anime');
+    const { anime, latest } = await loadAnime();
+    if (seq !== NAV) return;
     const genres = [...new Set(anime.flatMap(gOf))].sort();
     GENRES = genres;
     let gsel = (searchMode && genreSel && genres.includes(genreSel)) ? genreSel : 'All';
@@ -277,25 +294,27 @@ async function home(searchMode) {
     app.querySelectorAll('.ep-c').forEach(b => b.onclick = () => askUnlock(b.dataset.id));
     SEARCHPG = searchMode ? { root: app.firstElementChild, select } : null;
     draw(); if (!searchMode) maybePopup();
-  } catch (e) { app.innerHTML = `<div class="center"><p>${esc(e.message)}</p></div>`; }
+  } catch (e) { if (seq !== NAV) return; app.innerHTML = `<div class="center"><p>${esc(e.message)}</p></div>`; }
 }
 
 /* ---------- New episodes (poori list) ---------- */
 async function newPage() {
+  const seq = navStart();
   stopPlayer(); chrome(true, 'home'); loading('Loading...');
   try {
-    const { latest } = await api('anime');
+    const { latest } = await loadAnime();
+    if (seq !== NAV) return;
     app.innerHTML = `<section class="page home">${secHead('New episodes', '')}
       ${latest && latest.length ? `<div class="grid16">${latest.map(epCard).join('')}</div>` : '<p class="empty">No new episodes right now.</p>'}</section>`;
     app.querySelectorAll('.ep-c').forEach(b => b.onclick = () => askUnlock(b.dataset.id));
-  } catch (e) { app.innerHTML = `<div class="center"><p>${esc(e.message)}</p></div>`; }
+  } catch (e) { if (seq !== NAV) return; app.innerHTML = `<div class="center"><p>${esc(e.message)}</p></div>`; }
 }
 
 /* ---------- menu (3 lines): tags + social links ---------- */
 const drawer = $('#drawer'), drawerBg = $('#drawerBg');
 function closeMenu() { drawer.classList.remove('open'); drawerBg.hidden = true; }
 async function openMenu() {
-  if (!GENRES.length) { try { const { anime } = await api('anime'); GENRES = [...new Set(anime.flatMap(gOf))].sort(); } catch (e) { /* ignore */ } }
+  if (!GENRES.length) { try { const { anime } = await loadAnime(); GENRES = [...new Set(anime.flatMap(gOf))].sort(); } catch (e) { /* ignore */ } }
   $('#drTags').innerHTML = GENRES.length ? GENRES.map(g => `<button class="dtag" data-g="${esc(g)}">${esc(g)}</button>`).join('') : '<p class="muted">No tags yet.</p>';
   $('#drSoc').innerHTML = socialList() || '<p class="muted">No links yet.</p>';
   drawerBg.hidden = false; drawer.classList.add('open');
@@ -314,9 +333,11 @@ document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeMenu(
 
 /* ---------- anime page ---------- */
 async function animePage(id) {
+  const seq = navStart();
   stopPlayer(); chrome(true, 'home'); loading();
   try {
     const { anime, episodes } = await api('anime?id=' + encodeURIComponent(id));
+    if (seq !== NAV) return;
     app.innerHTML = `<section class="page dp">
       <div class="dp-hero" style="background-image:url('${esc(anime.poster_url || '')}')"></div>
       <a class="back" href="#/">Back</a>
@@ -419,7 +440,7 @@ function askUnlock(episodeId) {
 }
 
 async function verifyScreen(token) {
-  stopPlayer(); chrome(false); loading('Checking link...');
+  navStart(); stopPlayer(); chrome(false); loading('Checking link...');
   history.replaceState(null, '', location.pathname);
   try {
     const r = await post('verify', { token });
@@ -473,16 +494,19 @@ function friendlyError(d) {
 }
 
 async function watch(id) {
+  const seq = navStart();
   stopPlayer(); chrome(true, 'home'); setBg('none'); loading('Preparing video...'); // video page par background nahi
   let info;
   try { info = await api('play?e=' + encodeURIComponent(id)); }
   catch (e) {
+    if (seq !== NAV) return;
     app.innerHTML = `<div class="center"><h3>${e.status === 403 ? 'Episode locked' : 'Video could not open'}</h3>
       <p>${e.status === 403 ? 'Your 1 hour of access has ended, or the link was not completed.' : esc(e.message)}</p>
       ${e.status === 403 ? '<button class="btn" id="relock">Unlock again</button>' : ''}<a class="btn ghost" href="#/">Go home</a></div>`;
     const b = $('#relock'); if (b) b.onclick = () => askUnlock(id);
     return;
   }
+  if (seq !== NAV) return;
 
   app.innerHTML = `<section class="watch"><div class="wgrid"><div class="wmain">
     ${info.servers > 1 ? `<div class="srvbar" id="srvbar"><span>Server</span><button class="srvb on" data-s="1">Server 1</button><button class="srvb" data-s="2">Server 2</button><div class="srvnote" id="srvnote" hidden>Video not loading? Try switching the server.</div></div>` : ''}
@@ -763,7 +787,7 @@ async function watch(id) {
 
 /* ---------- me ---------- */
 function meScreen() {
-  stopPlayer(); chrome(true, 'me');
+  navStart(); stopPlayer(); chrome(true, 'me');
   app.innerHTML = `<section class="page"><div class="me"><div class="avatar">${esc((me.name || '?')[0].toUpperCase())}</div>
     <h2>${esc(me.name)}</h2><p class="muted">${esc(me.email)}</p></div>
     ${socialList() ? `<div class="me-soc"><div class="dr-sec">Follow us</div><div class="dr-soc">${socialList()}</div></div>` : ''}
@@ -775,7 +799,7 @@ function meScreen() {
 
 /* ---------- about / legal ---------- */
 function aboutScreen() {
-  stopPlayer(); chrome(true, 'me');
+  navStart(); stopPlayer(); chrome(true, 'me');
   const mail = S.contact_email ? `<a href="mailto:${esc(S.contact_email)}">${esc(S.contact_email)}</a>` : 'Contact the admin through the social links.';
   app.innerHTML = `<section class="page legal"><a class="back" href="#/me">Back</a><h1>Disclaimer, DMCA &amp; Contact</h1>
     <h2>Disclaimer</h2><p>Content shown on this site is added by uploaders. The site does not claim ownership of any anime or video.${S.age_gate !== '0' ? ' This site is for users aged 18+ only.' : ''}</p>
