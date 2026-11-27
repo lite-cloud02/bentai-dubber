@@ -1,7 +1,25 @@
-const { db, UUID, send, fail, limited, ipOf } = require('./_lib');
+const { db, UUID, send, fail, limited, ipOf, getUser, activeGameGrant } = require('./_lib');
 module.exports = async (req, res) => {
   try {
     if (await limited(req, res, 'anime:' + ipOf(req), 300, 60)) return;
+    // Games ki list (sirf title + thumbnail)
+    if (req.query.games) {
+      const r = await db.from('games').select('id,title,thumb_url').order('created_at', { ascending: false });
+      return send(res, 200, { games: r.error ? [] : (r.data || []).map(g => ({ id: g.id, title: g.title, thumb_url: g.thumb_url })) }); // download link kabhi list mein nahi
+    }
+    // Ek game ki detail. Download link tabhi milta hai jab is user ka access (shortener ke baad) chalu ho
+    if (req.query.game) {
+      const gid = req.query.game;
+      if (!UUID.test(gid)) return fail(res, 400, 'Bad id');
+      const { data: g } = await db.from('games').select('id,title,description,thumb_url,shots,download_url').eq('id', gid).maybeSingle();
+      if (!g) return fail(res, 404, 'Game not found');
+      let unlocked = false;
+      try { const u = await getUser(req); if (u) unlocked = !!(await activeGameGrant(u.id, gid)); } catch (e) { /* login nahi = locked */ }
+      return send(res, 200, {
+        game: { id: g.id, title: g.title, description: g.description, thumb_url: g.thumb_url, shots: g.shots || [] },
+        unlocked, download_url: unlocked ? g.download_url : ''
+      });
+    }
     const id = req.query.id;
     if (id) {
       if (!UUID.test(id)) return fail(res, 400, 'Bad id');
