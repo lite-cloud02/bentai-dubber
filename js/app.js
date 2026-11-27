@@ -310,6 +310,45 @@ async function newPage() {
   } catch (e) { if (seq !== NAV) return; app.innerHTML = `<div class="center"><p>${esc(e.message)}</p></div>`; }
 }
 
+/* ---------- Games (download unlock shortener ke baad) ---------- */
+async function gamesPage() {
+  const seq = navStart();
+  stopPlayer(); chrome(true, 'games'); loading('Loading games...');
+  try {
+    const { games } = await api('anime?games=1');
+    if (seq !== NAV) return;
+    app.innerHTML = `<section class="page home">${secHead('Games', '')}
+      ${games.length ? `<div class="grid16">${games.map(g => `<a class="c16" href="#/game/${g.id}" aria-label="${esc(g.title)}"><div class="t16">${thumb({ poster_url: g.thumb_url, title: g.title })}</div><span class="ct">${esc(g.title)}</span></a>`).join('')}</div>` : '<p class="empty">No games yet. Please check back soon.</p>'}</section>`;
+  } catch (e) { if (seq !== NAV) return; app.innerHTML = `<div class="center"><p>${esc(e.message)}</p></div>`; }
+}
+
+async function gamePage(id) {
+  const seq = navStart();
+  stopPlayer(); chrome(true, 'games'); loading();
+  try {
+    const { game, unlocked, download_url } = await api('anime?game=' + encodeURIComponent(id));
+    if (seq !== NAV) return;
+    const shots = game.shots || [];
+    app.innerHTML = `<section class="page game">
+      <a class="back" href="#/games">Back</a>
+      <div class="ghero">${game.thumb_url ? `<img src="${esc(game.thumb_url)}" alt="${esc(game.title)}">` : `<span class="ph">${esc((game.title || '?')[0])}</span>`}</div>
+      <h1 class="gtitle">${esc(game.title)}</h1>
+      ${shots.length ? `${secHead('Gameplay', '')}<div class="hslide gshots">${shots.map((s, i) => `<img class="gshot" data-i="${i}" src="${esc(s)}" alt="Gameplay ${i + 1}" loading="lazy" decoding="async">`).join('')}</div>` : ''}
+      ${game.description ? `${secHead('About this game', '')}<p class="gdesc">${esc(game.description)}</p>` : ''}
+      ${socialList() ? `${secHead('Follow us', '')}<div class="dr-soc">${socialList()}</div>` : ''}
+      ${secHead('Download', '')}
+      <div class="gdl">${unlocked && download_url
+        ? `<a class="btn" id="gGet" href="${esc(download_url)}" target="_blank" rel="noopener noreferrer">Download now</a><p class="muted">Your download link stays open for 1 hour.</p>`
+        : `<button class="btn" id="gUnlock">Unlock download</button><p class="muted">Complete one short link to get the download link.</p>`}</div>
+    </section>`;
+    const un = $('#gUnlock'); if (un) un.onclick = () => askUnlock(id, 'game');
+    app.querySelectorAll('.gshot').forEach(im => im.onclick = () => {
+      showModal(`<img class="gbig" src="${esc(shots[Number(im.dataset.i)])}" alt="Gameplay"><button class="btn ghost" id="gbX">Close</button>`);
+      $('#gbX').onclick = closeModal;
+    });
+  } catch (e) { if (seq !== NAV) return; app.innerHTML = `<div class="center"><h3>Game not found</h3><p>${esc(e.message)}</p><a class="btn" href="#/games">All games</a></div>`; }
+}
+
 /* ---------- menu (3 lines): tags + social links ---------- */
 const drawer = $('#drawer'), drawerBg = $('#drawerBg');
 function closeMenu() { drawer.classList.remove('open'); drawerBg.hidden = true; }
@@ -421,16 +460,17 @@ function showAdblockNotice(url, why) {
   };
 }
 
-function askUnlock(episodeId) {
-  showModal(`<h3>Unlock this episode</h3>
-    <p>Complete one short link to unlock this episode. Then you can watch it for <b>1 hour</b>.</p>
+function askUnlock(episodeId, kind) {
+  const game = kind === 'game'; // game ka download ya episode, dono ka flow ek jaisa
+  showModal(`<h3>${game ? 'Unlock the download' : 'Unlock this episode'}</h3>
+    <p>${game ? 'Complete one short link to unlock the download link. It stays open for <b>1 hour</b>.' : 'Complete one short link to unlock this episode. Then you can watch it for <b>1 hour</b>.'}</p>
     <button class="btn" id="mGo">Open link</button><button class="btn ghost" id="mNo">Not now</button>`);
   $('#mNo').onclick = closeModal;
   $('#mGo').onclick = async () => {
     $('#mGo').disabled = true; $('#mGo').textContent = 'Preparing link...';
     try {
-      const r = await post('start', { episodeId });
-      if (r.direct) { closeModal(); location.hash = '#/watch/' + episodeId; }
+      const r = await post('start', game ? { gameId: episodeId } : { episodeId });
+      if (r.direct) { closeModal(); if (!game) location.hash = '#/watch/' + episodeId; else if (location.hash === '#/game/' + episodeId) gamePage(episodeId); else location.hash = '#/game/' + episodeId; }
       else { const why = await adblockWhy(r.url); if (why.length) showAdblockNotice(r.url, why); else location.href = r.url; } // shortener se pehle adblock check
     } catch (e) {
       showModal(`<h3>Link failed</h3><p>${esc(e.message)}</p><button class="btn" id="mOk">OK</button>`);
@@ -444,7 +484,7 @@ async function verifyScreen(token) {
   history.replaceState(null, '', location.pathname);
   try {
     const r = await post('verify', { token });
-    location.hash = '#/watch/' + r.episodeId;
+    location.hash = r.gameId ? '#/game/' + r.gameId : '#/watch/' + r.episodeId;
   } catch (e) {
     app.innerHTML = `<div class="center"><h3>Verification failed</h3><p>${esc(e.message)}</p><a class="btn" href="#/">Go home</a></div>`;
   }
@@ -816,6 +856,8 @@ function route() {
   if (h[0] === 'anime' && h[1]) return animePage(h[1]);
   if (h[0] === 'watch' && h[1]) return watch(h[1]);
   if (h[0] === 'search') { const fromTag = !!genreSel; return home(true).then(() => { const q = $('#q'); if (q && !fromTag) q.focus(); }); }
+  if (h[0] === 'games') return gamesPage();
+  if (h[0] === 'game' && h[1]) return gamePage(h[1]);
   if (h[0] === 'new') return newPage();
   if (h[0] === 'me') return meScreen();
   if (h[0] === 'about') return aboutScreen();
