@@ -1,4 +1,4 @@
-const { db, cfg, UUID, getUser, vipInfo, send, fail, activeGrant, limited, crypto } = require('./_lib');
+const { db, cfg, UUID, getUser, vipInfo, send, fail, activeGrant, activeGameGrant, limited, crypto } = require('./_lib');
 
 async function shorten(dest) {
   const key = process.env.AROLINKS_API_KEY;
@@ -25,23 +25,31 @@ module.exports = async (req, res) => {
     const user = await getUser(req);
     if (!user) return fail(res, 401, 'Please log in first');
     if (await limited(req, res, 'start:' + user.id, 10, 60)) return;
-    const episodeId = req.body && req.body.episodeId;
-    if (!UUID.test(episodeId || '')) return fail(res, 400, 'Bad episode');
+    // Target: episode ya game. Dono ka flow ek jaisa hai (access ek ghante ka, shortener ke baad)
+    const game = !!(req.body && req.body.gameId);
+    const targetId = game ? req.body.gameId : (req.body && req.body.episodeId);
+    if (!UUID.test(targetId || '')) return fail(res, 400, game ? 'Bad game' : 'Bad episode');
+    const grantTable = game ? 'game_grants' : 'access_grants', col = game ? 'game_id' : 'episode_id';
 
-    const { data: ep } = await db.from('episodes').select('id').eq('id', episodeId).maybeSingle();
-    if (!ep) return fail(res, 404, 'Episode not found');
+    if (game) {
+      const { data: g } = await db.from('games').select('id').eq('id', targetId).maybeSingle();
+      if (!g) return fail(res, 404, 'Game not found');
+    } else {
+      const { data: ep } = await db.from('episodes').select('id').eq('id', targetId).maybeSingle();
+      if (!ep) return fail(res, 404, 'Episode not found');
+    }
 
     // 1 ghante ka access abhi chal raha hai to dobara shortener nahi
-    if (await activeGrant(user.id, episodeId)) return send(res, 200, { direct: true });
+    if (await (game ? activeGameGrant : activeGrant)(user.id, targetId)) return send(res, 200, { direct: true });
 
     // VIP / admin: shortener skip. Normal user jaisa hi grant milta hai (VIP expiry se pehle khatam)
     const vip = await vipInfo(user);
     if (vip) {
       let exp = Date.now() + cfg.accessMinutes * 60000;
       if (vip.expiresAt) exp = Math.min(exp, new Date(vip.expiresAt).getTime());
-      await db.from('access_grants').upsert(
-        { user_id: user.id, episode_id: episodeId, expires_at: new Date(exp).toISOString() },
-        { onConflict: 'user_id,episode_id' }
+      await db.from(grantTable).upsert(
+        { user_id: user.id, [col]: targetId, expires_at: new Date(exp).toISOString() },
+        { onConflict: 'user_id,' + col }
       );
       return send(res, 200, { direct: true });
     }
@@ -53,7 +61,7 @@ module.exports = async (req, res) => {
 
     const token = crypto.randomBytes(24).toString('hex');
     const short = await shorten(`${cfg.siteUrl}/?t=${token}`);
-    await db.from('shortener_tokens').insert({ token, user_id: user.id, episode_id: episodeId });
+    await db.from('shortener_tokens').insert({ token, user_id: user.id, [col]: targetId });
     // Token client ko nahi bheja jaata, sirf short link jaata hai
     send(res, 200, { url: short });
   } catch (e) {
