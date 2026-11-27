@@ -73,6 +73,13 @@ async function activeGrant(userId, episodeId) {
   return data || null;
 }
 
+async function activeGameGrant(userId, gameId) {
+  const { data } = await db.from('game_grants').select('expires_at')
+    .eq('user_id', userId).eq('game_id', gameId)
+    .gt('expires_at', new Date().toISOString()).maybeSingle();
+  return data || null;
+}
+
 // ---------- Rate limit (supabase/update4.sql ki rate_limits table + rl_hit function) ----------
 const ipOf = req => String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || (req.socket && req.socket.remoteAddress) || 'ip';
 async function limited(req, res, key, max, seconds) {
@@ -113,4 +120,4 @@ async function claimDevice(req, user, episodeId, register) {
   return null;
 }
 
-module.exports = { db, cfg, ipOf, limited, claimDevice, missing, UUID, getUser, isAdmin, vipInfo, displayName, send, fail, episodeKey, activeGrant, crypto };
+module.exports = { db, cfg, ipOf, limited, claimDevice, missing, UUID, getUser, isAdmin, vipInfo, displayName, send, fail, episodeKey, activeGrant, activeGameGrant, crypto };
