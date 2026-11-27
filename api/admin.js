@@ -29,7 +29,12 @@ module.exports = async (req, res) => {
       } catch (e) { /* table abhi nahi bani */ }
       // Video servers ki sthiti (sirf admin ko): kaun si Vercel value mili / nahi mili (value kabhi nahi dikhti)
       const storage = [1, 2].map(n => ({ n, ok: configured(n), missing: s3missing(n), bucket: conf(n).bucket }));
-      return send(res, 200, { anime: data || [], settings: await loadSettings(db), reports, vips, storage });
+      let games = [];
+      try {
+        const g = await db.from('games').select('id,title,description,thumb_url,shots,download_url,created_at').order('created_at', { ascending: false });
+        games = g.data || [];
+      } catch (e) { /* table abhi nahi bani (update6.sql baaki) */ }
+      return send(res, 200, { anime: data || [], settings: await loadSettings(db), reports, vips, storage, games });
     }
     if (req.method !== 'POST') return fail(res, 405, 'Method not allowed');
 
@@ -67,6 +72,27 @@ module.exports = async (req, res) => {
       if (!UUID.test(b.id || '')) return fail(res, 400, 'Bad id');
       const { error } = await db.from('episodes').update({ title, number, thumb_url: thumb }).eq('id', b.id);
       if (error) return fail(res, 500, thumbErr(error.message));
+      return send(res, 200, { ok: true });
+    }
+
+    if (b.action === 'addGame' || b.action === 'updateGame') {
+      const title = txt(b.title, 120);
+      if (!title) return fail(res, 400, 'Enter a game title');
+      const link = (s, n) => txt(s, n);
+      const thumb = link(b.thumb_url, 500), dl = link(b.download_url, 1000);
+      const shots = (Array.isArray(b.shots) ? b.shots : []).slice(0, 6).map(x => link(x, 500)).filter(Boolean);
+      const bad = [thumb, dl, ...shots].find(u => u && !/^https?:\/\//i.test(u));
+      if (bad) return fail(res, 400, 'Images and the download link must start with https://');
+      const row = { title, description: txt(b.description, 3000), thumb_url: thumb, shots, download_url: dl };
+      const gErr = m => (/games/.test(m || '') ? 'Run supabase/update6.sql in Supabase first (games table is missing).' : m);
+      if (b.action === 'addGame') {
+        const { data, error } = await db.from('games').insert(row).select('id').single();
+        if (error) return fail(res, 500, gErr(error.message));
+        return send(res, 200, { id: data.id });
+      }
+      if (!UUID.test(b.id || '')) return fail(res, 400, 'Bad id');
+      const { error } = await db.from('games').update(row).eq('id', b.id);
+      if (error) return fail(res, 500, gErr(error.message));
       return send(res, 200, { ok: true });
     }
 
@@ -118,9 +144,9 @@ module.exports = async (req, res) => {
       return send(res, 200, { ok: true });
     }
 
-    if (b.action === 'deleteAnime' || b.action === 'deleteEpisode' || b.action === 'resolveReport') {
+    if (b.action === 'deleteAnime' || b.action === 'deleteEpisode' || b.action === 'resolveReport' || b.action === 'deleteGame') {
       if (!UUID.test(b.id || '')) return fail(res, 400, 'Bad id');
-      const table = b.action === 'deleteAnime' ? 'anime' : b.action === 'deleteEpisode' ? 'episodes' : 'reports';
+      const table = b.action === 'deleteAnime' ? 'anime' : b.action === 'deleteEpisode' ? 'episodes' : b.action === 'deleteGame' ? 'games' : 'reports';
       const { error } = await db.from(table).delete().eq('id', b.id);
       if (error) return fail(res, 500, error.message);
       return send(res, 200, { ok: true });
