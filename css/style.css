@@ -447,3 +447,27 @@ body[data-bg="auth"]::before{background:linear-gradient(rgba(7,6,13,0),rgba(7,6,
 .srvb.on{background:linear-gradient(135deg,#ff2d78,#a43bff);border-color:transparent;color:#fff}
 .srvnote{flex-basis:100%;margin-top:2px;padding:8px 12px;border-radius:10px;background:rgba(255,45,120,.14);border:1px solid rgba(255,45,120,.4);font-size:13px;color:#ffd5e4}
 .cap{display:flex;justify-content:center;margin:8px 0 2px;min-height:0}
+
+/* Games */
+.ghero{aspect-ratio:16/9;border-radius:18px;overflow:hidden;background:linear-gradient(150deg,#3a1050,#15101f);border:1px solid rgba(255,255,255,.12);display:grid;place-items:center;margin-top:8px}
+.ghero img{width:100%;height:100%;object-fit:cover}
+.ghero .ph{font-size:56px}
+.gtitle{font-size:26px;font-weight:800;margin:14px 2px 0;line-height:1.2}
+.gshots{gap:10px}
+.gshot{flex:none;height:210px;width:auto;border-radius:14px;scroll-snap-align:start;border:1px solid rgba(255,255,255,.12);background:#15101f;cursor:pointer}
+.gdesc{margin:0 2px;line-height:1.6;color:#d8d2e8;white-space:pre-wrap;word-break:break-word}
+.gdl{margin:0 2px 8px}
+.gdl .btn{display:block;text-align:center;text-decoration:none;max-width:360px}
+.gdl .muted{margin:8px 0 0;font-size:13px}
+.gbig{display:block;width:100%;max-height:70vh;object-fit:contain;border-radius:12px;margin-bottom:12px}
+@media(min-width:700px){.bottom-nav{width:520px;margin-left:-260px}}
+
+/* admin: side-scroll tabs + game screenshots */
+.atabs{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:4px 2px 14px;margin:0 -2px;position:sticky;top:0;z-index:5;background:linear-gradient(var(--bg) 70%,transparent)}
+.atabs::-webkit-scrollbar{display:none}
+.atabs button{flex:none;padding:10px 20px;border-radius:22px;border:1px solid rgba(255,255,255,.14);background:rgba(14,10,24,.8);color:#e8e2f5;font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+.atabs button.on{background:linear-gradient(135deg,#ff2d78,#e8206e);border-color:#ff5c98;color:#fff}
+.shotrow{display:flex;gap:10px;overflow-x:auto;padding:6px 0 10px}
+.shot{position:relative;flex:none;height:96px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#15101f}
+.shot img{height:100%;width:auto;display:block}
+.shot button{position:absolute;top:4px;right:4px;width:24px;height:24px;border:0;border-radius:50%;background:rgba(0,0,0,.75);color:#fff;font-size:16px;line-height:1;cursor:pointer}
