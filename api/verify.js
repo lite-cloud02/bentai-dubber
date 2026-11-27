@@ -23,6 +23,10 @@ module.exports = async (req, res) => {
     if (!claimed || !claimed.length) return fail(res, 400, 'This link was already used.');
 
     const expires = new Date(Date.now() + cfg.accessMinutes * 60000).toISOString();
+    if (t.game_id) { // game ka download unlock
+      await db.from('game_grants').upsert({ user_id: user.id, game_id: t.game_id, expires_at: expires }, { onConflict: 'user_id,game_id' });
+      return send(res, 200, { gameId: t.game_id });
+    }
     await db.from('access_grants').upsert(
       { user_id: user.id, episode_id: t.episode_id, expires_at: expires },
       { onConflict: 'user_id,episode_id' }
