@@ -1,5 +1,5 @@
 const root = $('#admin');
-let data = { anime: [], settings: {}, reports: [], vips: [] }, editA = null, editE = null, msg = '';
+let data = { anime: [], settings: {}, reports: [], vips: [], games: [] }, editA = null, editE = null, editG = null, tab = 'content', gShots = [], gShotsFor = null, msg = '';
 const v = x => esc(x == null ? '' : x);
 
 async function start() {
@@ -17,8 +17,16 @@ function render() {
   const inp = (k, label, ph) => `<div class="field"><label>${label}</label><input name="${k}" value="${v(S[k])}" placeholder="${ph || ''}"></div>`;
   const chk = (k, label) => `<label class="chk"><input type="checkbox" name="${k}" ${S[k] === '1' ? 'checked' : ''}> ${label}</label>`;
 
+  const games = data.games || [];
+  const g = editG ? games.find(x => x.id === editG) : null;
+  const gKey = editG || 'new';
+  if (gShotsFor !== gKey) { gShots = g ? [...(g.shots || [])] : []; gShotsFor = gKey; }
+  const hid = t => (tab === t ? '' : ' hidden');
   root.innerHTML = `<a class="back" href="index.html">Back</a><h1>Admin panel</h1>
 
+  <div class="atabs" id="atabs"><button type="button" data-t="content" class="${tab === 'content' ? 'on' : ''}">Anime</button><button type="button" data-t="games" class="${tab === 'games' ? 'on' : ''}">Games</button><button type="button" data-t="users" class="${tab === 'users' ? 'on' : ''}">Users</button><button type="button" data-t="settings" class="${tab === 'settings' ? 'on' : ''}">Settings</button></div>
+
+  <div class="agrp" data-g="content"${hid('content')}>
   <form class="panel" id="fA"><h2>${a ? 'Edit anime' : 'Add anime'}</h2>
     <div class="field"><label>Title</label><input name="title" required value="${v(a && a.title)}"></div>
     <div class="field"><label>Genre (comma separated, e.g. Action, Ecchi)</label><input name="genre" value="${v(a ? a.genre : 'Action')}"></div>
@@ -44,13 +52,32 @@ function render() {
     ${e ? '<button type="button" class="btn ghost" id="cancelE">Cancel</button>' : ''}
     <div id="cmdBox"></div></form>
 
+  <div class="panel"><h2>Saved content</h2>${list.length ? list.map(x => `<div class="row"><span><b>${v(x.title)}</b> <small>${v(x.genre)}</small></span><span><button class="del ed" data-ea="${x.id}">Edit</button> <button class="del" data-a="${x.id}">Delete</button></span></div>
+    ${(x.episodes || []).map(ep => `<div class="row sub-eps"><span>${ep.number}. ${v(ep.title)}<br><small>${ep.id}</small></span><span><button class="del ed" data-ee="${ep.id}">Edit</button> <button class="del" data-e="${ep.id}">Delete</button></span></div>`).join('')}`).join('') : '<p class="muted">Nothing added yet.</p>'}
+    <p class="muted" style="font-size:12px">Deleting does not remove video files from Backblaze. Remove them there separately.</p></div>
+  </div>
+  <div class="agrp" data-g="games"${hid('games')}>
+  <form class="panel" id="fG"><h2>${g ? 'Edit game' : 'Add game'}</h2>
+    <div class="field"><label>Game title</label><input name="title" required maxlength="120" value="${v(g && g.title)}" placeholder="Game name"></div>
+    <div class="field"><label>Description</label><textarea name="description" rows="5" maxlength="3000" placeholder="About the game">${v(g && g.description)}</textarea></div>
+    <div class="field"><label>Thumbnail (16:9)</label>
+      <div class="pup"><div class="pprev ethumb" id="gPrev">${g && g.thumb_url ? `<img src="${v(g.thumb_url)}" alt="">` : 'No image'}</div>
+        <div><label class="btn ghost pbtn">Upload image<input type="file" id="gFile" accept="image/*" hidden></label><button type="button" class="btn ghost pbtn" id="gClear">Remove</button></div></div>
+      <input name="thumb_url" id="gUrl" value="${v(g && g.thumb_url)}" placeholder="or paste an image URL">
+      <p class="muted" id="gMsg" style="font-size:13px">Any image works, it is cropped to 16:9 automatically.</p></div>
+    <div class="field"><label>Gameplay screenshots (3-4 recommended, max 6)</label>
+      <div class="shotrow" id="gShots"></div>
+      <label class="btn ghost pbtn">Add screenshots<input type="file" id="gShotFile" accept="image/*" multiple hidden></label>
+      <p class="muted" id="gShotMsg" style="font-size:13px"></p></div>
+    <div class="field"><label>Download link (users see it only after unlocking)</label><input name="download_url" value="${v(g && g.download_url)}" placeholder="https://..."></div>
+    <button class="btn">${g ? 'Update game' : 'Save game'}</button>${g ? '<button type="button" class="btn ghost" id="cancelG" style="margin-top:8px">Cancel</button>' : ''}</form>
+
+  <div class="panel"><h2>Saved games (${games.length})</h2>${games.length ? games.map(x => `<div class="row"><span><b>${v(x.title)}</b><br><small>${(x.shots || []).length} screenshots</small></span><span><button type="button" class="del ed" data-eg="${x.id}">Edit</button> <button type="button" class="del" data-gd="${x.id}">Delete</button></span></div>`).join('') : '<p class="muted">No games yet.</p>'}</div>
+
+  </div>
+  <div class="agrp" data-g="users"${hid('users')}>
   <div class="panel"><h2>Reports (${(data.reports || []).length})</h2>
     ${(data.reports || []).length ? data.reports.map(r => `<div class="row"><span>${v(r.episodes && r.episodes.anime ? r.episodes.anime.title : '')} &middot; ${v(r.episodes && r.episodes.title)}<br><small>${v(r.message)} &middot; ${new Date(r.created_at).toLocaleString('en-IN')}</small></span><button class="del ok" data-r="${r.id}">Resolved</button></div>`).join('') : '<p class="muted">No reports yet.</p>'}</div>
-
-  <div class="panel"><h2>Video servers</h2>
-    ${(data.storage || []).map(s => `<p style="margin:8px 0">${s.ok ? '&#9989;' : '&#10060;'} <b>Server ${s.n}</b>: ${s.ok ? 'ready &middot; bucket ' + v(s.bucket) : 'not ready. Missing in Vercel: ' + v(s.missing.join(', '))}</p>`).join('') || '<p class="muted">No info.</p>'}
-    <p class="muted" style="font-size:13px">The Server 1 / Server 2 buttons show on the video page only when both servers are ready. After changing Vercel variables, Redeploy.</p>
-  </div>
 
   <form class="panel" id="fV"><h2>VIP accounts (${(data.vips || []).length})</h2>
     <p class="muted" style="font-size:13px;margin-top:-6px">VIP users skip the shortener link. Enter the email they used to sign up. After the VIP days end, the user is removed from this list automatically. Adding the same email again renews the days.</p>
@@ -64,6 +91,13 @@ function render() {
     <p class="muted" style="font-size:13px;margin-top:-6px">One account works on only 2 devices. If a user changed phone or cleared the browser, enter their email to clear their saved devices.</p>
     <div class="field"><label>User email</label><input name="email" type="email" required placeholder="user@gmail.com"></div>
     <button class="btn">Reset devices</button></form>
+
+  </div>
+  <div class="agrp" data-g="settings"${hid('settings')}>
+  <div class="panel"><h2>Video servers</h2>
+    ${(data.storage || []).map(s => `<p style="margin:8px 0">${s.ok ? '&#9989;' : '&#10060;'} <b>Server ${s.n}</b>: ${s.ok ? 'ready &middot; bucket ' + v(s.bucket) : 'not ready. Missing in Vercel: ' + v(s.missing.join(', '))}</p>`).join('') || '<p class="muted">No info.</p>'}
+    <p class="muted" style="font-size:13px">The Server 1 / Server 2 buttons show on the video page only when both servers are ready. After changing Vercel variables, Redeploy.</p>
+  </div>
 
   <form class="panel" id="fS"><h2>Site settings</h2>
     <p class="muted" style="font-size:13px;margin-top:-6px">Leave a field empty to hide it on the site. Links must start with https://</p>
@@ -88,9 +122,7 @@ function render() {
     <div class="field"><label>Extra information on the contact page</label><textarea name="about_text">${v(S.about_text)}</textarea></div>
     <button class="btn">Save settings</button><p class="muted" id="sMsg">${v(msg)}</p></form>
 
-  <div class="panel"><h2>Saved content</h2>${list.length ? list.map(x => `<div class="row"><span><b>${v(x.title)}</b> <small>${v(x.genre)}</small></span><span><button class="del ed" data-ea="${x.id}">Edit</button> <button class="del" data-a="${x.id}">Delete</button></span></div>
-    ${(x.episodes || []).map(ep => `<div class="row sub-eps"><span>${ep.number}. ${v(ep.title)}<br><small>${ep.id}</small></span><span><button class="del ed" data-ee="${ep.id}">Edit</button> <button class="del" data-e="${ep.id}">Delete</button></span></div>`).join('')}`).join('') : '<p class="muted">Nothing added yet.</p>'}
-    <p class="muted" style="font-size:12px">Deleting does not remove video files from Backblaze. Remove them there separately.</p></div>`;
+  </div>`;
 
   const run = async fn => { try { await fn(); } catch (err) { alert(err.message); } };
 
@@ -158,6 +190,69 @@ function render() {
     alert('Cleared ' + r.removed + ' saved device(s).');
     ev.target.reset();
   }); };
+
+
+  /* --- tabs (side scroll) --- */
+  const setTab = t => {
+    tab = t;
+    root.querySelectorAll('.agrp').forEach(x => { x.hidden = x.dataset.g !== t; });
+    root.querySelectorAll('#atabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+    window.scrollTo(0, 0);
+  };
+  root.querySelectorAll('#atabs button').forEach(b => b.onclick = () => setTab(b.dataset.t));
+
+  /* --- games --- */
+  const gUrl = $('#gUrl'), gPrev = $('#gPrev'), gMsg = $('#gMsg'), shotBox = $('#gShots'), shotMsg = $('#gShotMsg');
+  const showGPrev = () => { gPrev.innerHTML = gUrl.value ? `<img src="${v(gUrl.value)}" alt="">` : 'No image'; };
+  const drawShots = () => {
+    shotBox.innerHTML = gShots.length ? gShots.map((u, i) => `<div class="shot"><img src="${v(u)}" alt=""><button type="button" data-rm="${i}" aria-label="Remove">&times;</button></div>`).join('') : '<span class="muted">No screenshots yet.</span>';
+    shotBox.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { gShots.splice(Number(b.dataset.rm), 1); drawShots(); });
+  };
+  drawShots();
+  gUrl.addEventListener('input', showGPrev);
+  $('#gClear').onclick = () => { gUrl.value = ''; showGPrev(); };
+  const toCanvas = async (file, W, H, crop) => {
+    const bmp = await createImageBitmap(file), cv = document.createElement('canvas');
+    if (crop) { // 16:9 center crop
+      cv.width = W; cv.height = H;
+      const sc = Math.max(W / bmp.width, H / bmp.height), dw = bmp.width * sc, dh = bmp.height * sc;
+      cv.getContext('2d').drawImage(bmp, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    } else { // original ratio, chhota karke
+      const sc = Math.min(1, W / bmp.width, H / bmp.height);
+      cv.width = Math.round(bmp.width * sc); cv.height = Math.round(bmp.height * sc);
+      cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+    }
+    return cv;
+  };
+  const upCanvas = async cv => (await post('admin', { action: 'uploadPoster', data: cv.toDataURL('image/jpeg', 0.85).split(',')[1] })).url;
+  $('#gFile').onchange = async ev => {
+    const file = ev.target.files[0]; if (!file) return;
+    try { gMsg.textContent = 'Uploading...'; gUrl.value = await upCanvas(await toCanvas(file, 640, 360, true)); showGPrev(); gMsg.textContent = 'Uploaded. Press Save game below.'; }
+    catch (err) { gMsg.textContent = ''; alert(err.message); }
+  };
+  $('#gShotFile').onchange = async ev => {
+    const files = [...ev.target.files];
+    for (const file of files) {
+      if (gShots.length >= 6) { shotMsg.textContent = 'Maximum 6 screenshots.'; break; }
+      try { shotMsg.textContent = 'Uploading ' + file.name + '...'; gShots.push(await upCanvas(await toCanvas(file, 960, 1280, false))); drawShots(); shotMsg.textContent = 'Uploaded. Press Save game below.'; }
+      catch (err) { shotMsg.textContent = ''; alert(err.message); break; }
+    }
+    ev.target.value = '';
+  };
+  $('#fG').onsubmit = ev => { ev.preventDefault(); run(async () => {
+    const f = Object.fromEntries(new FormData(ev.target));
+    const body = { title: f.title, description: f.description, thumb_url: f.thumb_url, download_url: f.download_url, shots: gShots };
+    if (editG) await post('admin', { action: 'updateGame', id: editG, ...body });
+    else await post('admin', { action: 'addGame', ...body });
+    editG = null; gShotsFor = null; tab = 'games';
+    await load();
+  }); };
+  if ($('#cancelG')) $('#cancelG').onclick = () => { editG = null; gShotsFor = null; render(); };
+  root.querySelectorAll('[data-eg]').forEach(b => b.onclick = () => { editG = b.dataset.eg; gShotsFor = null; tab = 'games'; render(); $('#fG').scrollIntoView(); });
+  root.querySelectorAll('[data-gd]').forEach(b => b.onclick = () => run(async () => {
+    if (!confirm('Delete this game?')) return;
+    await post('admin', { action: 'deleteGame', id: b.dataset.gd }); await load();
+  }));
 
   $('#fS').onsubmit = ev => { ev.preventDefault(); run(async () => {
     const form = ev.target, settings = {};
